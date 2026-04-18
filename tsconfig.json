@@ -11,7 +11,8 @@
     // "baseUrl": ".", // Đường dẫn base cho các import , từ TS v7 bỏ hẳn, chỗ paths thêm './src/*'
     "paths": {
       "~/*": ["./src/*"] // Đường dẫn tương đối cho các import (alias)
-    }
+    },
+    "types": ["node"]
   },
   "files": ["src/type.d.ts"], // Các file dùng để defined global type cho dự án
   "include": ["src/**/*"] // Đường dẫn include cho các file cần build
