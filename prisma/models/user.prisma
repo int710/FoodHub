@@ -1,0 +1,33 @@
+enum Role {
+  ADMIN
+  STAFF
+  CUSTOMER
+}
+
+model User {
+  id String @id @default(uuid()) // Pk
+  email String @unique // uk
+  password String
+  name String
+  phone String?
+  avatar String?
+  role Role @default(CUSTOMER)
+  isVerified Boolean @default(false)
+  isActive Boolean @default(true)
+
+  verifyEmailToken String?
+  forgotPasswordToken String?
+
+  invitedById String?
+  lastLoginAt DateTime?
+  createdAt DateTime
+  updatedAt DateTime
+
+
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+  @@index([verifyEmailToken])
+  @@index([forgotPasswordToken])
+
+}
