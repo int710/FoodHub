@@ -5,29 +5,27 @@ enum Role {
 }
 
 model User {
-  id String @id @default(uuid()) // Pk
-  email String @unique // uk
-  password String
-  name String
-  phone String?
-  avatar String?
-  role Role @default(CUSTOMER)
-  isVerified Boolean @default(false)
-  isActive Boolean @default(true)
-
-  verifyEmailToken String?
-  forgotPasswordToken String?
-
-  invitedById String?
-  lastLoginAt DateTime?
-  createdAt DateTime
-  updatedAt DateTime
-
+  id                  String    @id @default(uuid())
+  email               String    @unique
+  password            String
+  name                String
+  dateOfBirth         DateTime? @db.Date @map("date_of_birth")
+  phone               String?
+  avatar              String?
+  role                Role      @default(CUSTOMER)
+  isVerified          Boolean   @default(false) @map("is_verified") 
+  isActive            Boolean   @default(true) @map("is_active")
+  verifyEmailToken    String?   @map("verify_email_token")
+  forgotPasswordToken String?   @map("forgot_password_token")
+  invitedById         String?   @map("invited_by_id")
+  lastLoginAt         DateTime? @map("last_login_at")       
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at") 
 
   @@index([email])
   @@index([role])
   @@index([isActive])
   @@index([verifyEmailToken])
   @@index([forgotPasswordToken])
-
+  @@map("users")
 }
