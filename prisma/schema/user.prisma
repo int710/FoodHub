@@ -22,10 +22,30 @@ model User {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at") 
 
+  refreshToken RefreshToken[]
+  
   @@index([email])
   @@index([role])
   @@index([isActive])
   @@index([verifyEmailToken])
   @@index([forgotPasswordToken])
   @@map("users")
+}
+
+
+model RefreshToken {
+  id String @id @default(uuid())
+  token String
+  userId String @map("user_id")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceName String? 
+  deviceIP String? @map("device_ip")
+  userAgent String? @map("user_agent")
+  expiresAt DateTime @map("expires_at")
+  revokeAt DateTime? @map("revoke_at")
+  revokeReason String? @map("revoke_reason")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("refresh_tokens")
+
 }

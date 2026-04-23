@@ -1,5 +1,5 @@
-import { SYSTEM_MESSAGE } from '~/constants/enums'
 import HTTP_STATUS from '~/constants/httpStatus'
+import { SYSTEM_MESSAGE } from '~/constants/message'
 
 export type ErrorsType = Record<
   string,
