@@ -1,4 +1,12 @@
-export const SYSTEM_MESSAGE = {
-  VALIDATION_ERROR: 'Validation error',
-  INTERNAL_SERVER_ERROR: 'Internal server error'
+export enum TokenType {
+  AccessToken,
+  RefreshToken,
+  ForgotPasswordToken,
+  VerifyEmailToken
+}
+
+export enum Role {
+  ADMIN,
+  STAFF,
+  CUSTOMER
 }

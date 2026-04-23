@@ -14,7 +14,6 @@ export const validate = (schema: ZodType) => async (req: Request, res: Response,
     Object.assign(req, parsed)
     next()
   } catch (err) {
-    console.log('Log error in validate', err)
     if (err instanceof ZodError) {
       return next(new EntityError({ errors: mapZodError(err) }))
     }
