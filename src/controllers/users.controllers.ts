@@ -5,7 +5,13 @@ import { USER_MESSAGE } from '~/constants/message'
 import { ApiResponse } from '~/models/ApiResponse'
 import { ErrorWithStatus } from '~/models/Errors'
 import { TokenPayload } from '~/models/schemas/token.schema'
-import { LoginReqBody, LogoutReqBody, RefreshTokenReq, RegisterRequestBody } from '~/models/schemas/users.schema'
+import {
+  LoginReqBody,
+  LogoutReqBody,
+  RefreshTokenReq,
+  RegisterRequestBody,
+  VerifyEmailReq
+} from '~/models/schemas/users.schema'
 import userServices from '~/services/users.services'
 
 export const registerController = async (
@@ -13,7 +19,9 @@ export const registerController = async (
   res: Response,
   next: NextFunction
 ) => {
-  const data = await userServices.register(req.body)
+  const clientIP = req.ip as string
+  const userAgent = req.headers['user-agent'] as string
+  const data = await userServices.register(req.body, clientIP, userAgent)
   res.json(ApiResponse(USER_MESSAGE.REGISTER_SUCCESSFULLY, data))
 }
 
@@ -55,5 +63,15 @@ export const refreshTokenController = async (
 export const getMeController = async (req: Request, res: Response, next: NextFunction) => {
   const { user_id } = req.decoded_authorization as TokenPayload
   const user = await userServices.getProfile(user_id)
-  return res.json(ApiResponse('Get my profile success', user))
+  return res.json(ApiResponse(USER_MESSAGE.GET_MY_PROFILE_SUCCESS, user))
+}
+
+export const verifyEmailController = async (
+  req: Request<ParamsDictionary, any, VerifyEmailReq>,
+  res: Response,
+  next: NextFunction
+) => {
+  const { verify_email_token } = req.body
+  const result = await userServices.verifyEmail(verify_email_token)
+  return res.json(ApiResponse(result, null))
 }

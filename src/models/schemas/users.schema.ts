@@ -19,7 +19,6 @@ export const registerBodySchema = z
     error: 'Mật khẩu xác nhận không khớp',
     path: ['confirmPassword']
   })
-
 export const registerReqSchema = z.object({
   body: registerBodySchema
 })
@@ -39,8 +38,15 @@ export type LoginReqBody = z.infer<typeof loginBodySchema>
 const refreshTokenSchema = z.object({
   refresh_token: z.string({ error: 'RefreshToken is invalid' })
 })
+export type RefreshTokenReq = z.infer<typeof refreshTokenSchema>
 export const logoutReqBody = z.object({
   body: refreshTokenSchema
 })
 export type LogoutReqBody = z.infer<typeof refreshTokenSchema>
-export type RefreshTokenReq = z.infer<typeof refreshTokenSchema>
+
+// Verify-email
+const verifyEmailSchema = z.object({
+  verify_email_token: z.string().min(1)
+})
+export const verifyEmailReq = z.object({ body: verifyEmailSchema })
+export type VerifyEmailReq = z.infer<typeof verifyEmailSchema>
