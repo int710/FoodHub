@@ -34,3 +34,13 @@ export const loginReqBody = z.object({
   body: loginBodySchema
 })
 export type LoginReqBody = z.infer<typeof loginBodySchema>
+
+// Logout or RefreshToken
+const refreshTokenSchema = z.object({
+  refresh_token: z.string({ error: 'RefreshToken is invalid' })
+})
+export const logoutReqBody = z.object({
+  body: refreshTokenSchema
+})
+export type LogoutReqBody = z.infer<typeof refreshTokenSchema>
+export type RefreshTokenReq = z.infer<typeof refreshTokenSchema>

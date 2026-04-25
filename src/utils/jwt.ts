@@ -32,7 +32,7 @@ export const verifyToken = ({ token, secretOrPrivateKey }: { token: string; secr
 
       // Validate runtime valid Token
       const result = TokenPayloadSchema.safeParse(decoded)
-      if (!result.success) {
+      if (result.error) {
         return reject(
           new ErrorWithStatus({
             httpStatusCode: HTTP_STATUS.UNAUTHORIZED,
