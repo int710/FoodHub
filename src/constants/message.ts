@@ -15,5 +15,10 @@ export const USER_MESSAGE = {
   THIS_TOKEN_IS_NOT_A_REFRESH_TOKEN_TYPE: 'This token is not a refresh token type',
   TOKEN_HAS_EXPIRED: 'Token has expired',
   ACCESS_TOKEN_IS_REQUIRED: 'Access token is required',
-  USER_NOT_FOUND: 'User not found'
+  USER_NOT_FOUND: 'User not found',
+  GET_MY_PROFILE_SUCCESS: 'Get my profile success',
+  VERIFY_EMAIL_TOKEN_IS_REQUIRED: 'Verify email token is required',
+  VERIFY_EMAIL_TOKEN_IS_INVALID: 'Verify email token is invalid',
+  VERIFY_EMAIL_SUCCESS: 'Verify email success',
+  EMAIL_ALREADY_VERIFY_BEFORE: 'Email already verify before'
 }

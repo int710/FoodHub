@@ -9,6 +9,7 @@ import { SignTokenPayload } from '~/models/schemas/token.schema'
 import { RegisterRequestBody } from '~/models/schemas/users.schema'
 import { comparePassword, hashPassword } from '~/utils/crypto'
 import { signToken, verifyToken } from '~/utils/jwt'
+import { sendVerifyEmail } from '~/utils/send-email'
 
 class UserServices {
   private signAccessToken(payload: SignTokenPayload) {
@@ -35,7 +36,17 @@ class UserServices {
     return Promise.all([this.signAccessToken(payload), this.signRefreshToken(payload)])
   }
 
-  async register(payload: RegisterRequestBody) {
+  private async genarateEmailVerifyToken(payload: SignTokenPayload) {
+    return signToken({
+      payload: { ...payload, token_type: TokenType.VerifyEmailToken },
+      secretOrPrivateKey: process.env.SECRET_VERIFY_EMAIL as string,
+      options: {
+        expiresIn: '30d'
+      }
+    })
+  }
+
+  async register(payload: RegisterRequestBody, clientIP: string, userAgent: string) {
     const { email, password, name, dateOfBirth } = payload
     const isEmailExists = await prisma.user.findUnique({ where: { email } })
     if (isEmailExists) {
@@ -44,13 +55,37 @@ class UserServices {
         message: USER_MESSAGE.EMAIL_ALREADY_EXISTS
       })
     }
-
     const newUser = await prisma.user.create({
-      data: { email, name, password: await hashPassword(password), dateOfBirth },
-      select: { email: true, name: true, dateOfBirth: true }
+      data: { email, name, password: await hashPassword(password), dateOfBirth }
     })
 
-    return newUser
+    const payloadDataToken: SignTokenPayload = {
+      user_id: newUser.id,
+      email: newUser.email,
+      isVerified: newUser.isVerified,
+      role: newUser.role
+    }
+    const [tokens_arr, verify_email_token_raw] = await Promise.all([
+      this.signAccessAndRefreshToken(payloadDataToken),
+      this.genarateEmailVerifyToken(payloadDataToken)
+    ])
+    const [access_token, refresh_token] = tokens_arr as [string, string]
+    const verify_email_token = verify_email_token_raw as string
+
+    await Promise.all([
+      prisma.user.update({ where: { id: newUser.id }, data: { verifyEmailToken: verify_email_token } }),
+      prisma.refreshToken.create({
+        data: {
+          token: refresh_token,
+          userId: newUser.id,
+          deviceIP: clientIP,
+          userAgent,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        }
+      })
+    ])
+    sendVerifyEmail({ to: newUser.email, name: newUser.name, verifyToken: verify_email_token })
+    return { access_token, refresh_token }
   }
 
   async login(email: string, password: string, req: Request) {
@@ -189,6 +224,45 @@ class UserServices {
       throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.NOT_FOUND, message: USER_MESSAGE.USER_NOT_FOUND })
     }
     return user
+  }
+
+  async verifyEmail(verify_email_token: string) {
+    try {
+      if (!verify_email_token) {
+        throw new ErrorWithStatus({
+          httpStatusCode: HTTP_STATUS.BAD_REQUEST,
+          message: USER_MESSAGE.VERIFY_EMAIL_TOKEN_IS_REQUIRED
+        })
+      }
+
+      const decoded_verify_email_token = await verifyToken({
+        token: verify_email_token,
+        secretOrPrivateKey: process.env.SECRET_VERIFY_EMAIL as string
+      })
+
+      const user = await prisma.user.findUnique({ where: { id: decoded_verify_email_token.user_id } })
+      if (!user) {
+        throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.NOT_FOUND, message: USER_MESSAGE.USER_NOT_FOUND })
+      }
+      if (user.isVerified) {
+        return USER_MESSAGE.EMAIL_ALREADY_VERIFY_BEFORE
+      }
+
+      if (user && user.isVerified === false && user.verifyEmailToken !== verify_email_token) {
+        throw new ErrorWithStatus({
+          httpStatusCode: HTTP_STATUS.UNAUTHORIZED,
+          message: USER_MESSAGE.VERIFY_EMAIL_TOKEN_IS_INVALID
+        })
+      } else if (user && user.isVerified === false && user.verifyEmailToken === verify_email_token) {
+        await prisma.user.update({ where: { id: user.id }, data: { verifyEmailToken: null, isVerified: true } })
+        return USER_MESSAGE.VERIFY_EMAIL_SUCCESS
+      }
+    } catch (error) {
+      if (error instanceof JsonWebTokenError) {
+        throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.UNAUTHORIZED, message: error.message })
+      }
+      throw error
+    }
   }
 }
 
