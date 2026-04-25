@@ -167,6 +167,29 @@ class UserServices {
       throw error
     }
   }
+
+  async getProfile(user_id: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: user_id },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        phone: true,
+        avatar: true,
+        dateOfBirth: true,
+        isActive: true,
+        isVerified: true,
+        createdAt: true
+      }
+    })
+
+    if (!user) {
+      throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.NOT_FOUND, message: USER_MESSAGE.USER_NOT_FOUND })
+    }
+    return user
+  }
 }
 
 const userServices = new UserServices()
