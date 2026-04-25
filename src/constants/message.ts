@@ -13,5 +13,7 @@ export const USER_MESSAGE = {
   REFRESH_TOKEN_SUCCESSFULLY: 'Refresh token successfully',
   REFRESH_TOKEN_IS_NOT_EXISTS: 'Refresh token is not exists',
   THIS_TOKEN_IS_NOT_A_REFRESH_TOKEN_TYPE: 'This token is not a refresh token type',
-  TOKEN_HAS_EXPIRED: 'Token has expired'
+  TOKEN_HAS_EXPIRED: 'Token has expired',
+  ACCESS_TOKEN_IS_REQUIRED: 'Access token is required',
+  USER_NOT_FOUND: 'User not found'
 }

@@ -4,6 +4,7 @@ import HTTP_STATUS from '~/constants/httpStatus'
 import { USER_MESSAGE } from '~/constants/message'
 import { ApiResponse } from '~/models/ApiResponse'
 import { ErrorWithStatus } from '~/models/Errors'
+import { TokenPayload } from '~/models/schemas/token.schema'
 import { LoginReqBody, LogoutReqBody, RefreshTokenReq, RegisterRequestBody } from '~/models/schemas/users.schema'
 import userServices from '~/services/users.services'
 
@@ -49,4 +50,10 @@ export const refreshTokenController = async (
   }
   const result = await userServices.refreshToken(refresh_token, req)
   return res.json(ApiResponse(USER_MESSAGE.REFRESH_TOKEN_SUCCESSFULLY, result))
+}
+
+export const getMeController = async (req: Request, res: Response, next: NextFunction) => {
+  const { user_id } = req.decoded_authorization as TokenPayload
+  const user = await userServices.getProfile(user_id)
+  return res.json(ApiResponse('Get my profile success', user))
 }
