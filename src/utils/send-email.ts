@@ -39,3 +39,22 @@ export const sendVerifyEmail = ({ to, name, verifyToken }: { to: string; name: s
   const subject = 'Verify email account'
   return sendEmail({ to, subject, html })
 }
+
+export const sendEmailForgotPassword = ({
+  to,
+  name,
+  forgotPasswordToken
+}: {
+  to: string
+  name: string
+  forgotPasswordToken: string
+}) => {
+  const html = template({
+    title: 'Khôi phục mật khẩu tài khoản FoodHub',
+    content: `Xin chào ${name}, bạn vừa yêu cầu khôi phục mật khẩu tài khoản, vui lòng bấm vào link dưới đây để hoàn tất quá trình, liên kết chỉ hợp lệ trong vòng 12h tính từ thời điểm bạn nhận được email này !`,
+    button_text: 'Khôi phục ngay',
+    button_url: `https://localhost:3000/forgot-password?token=${forgotPasswordToken}`
+  })
+  const subject = 'Quên mật khẩu'
+  return sendEmail({ to, subject, html })
+}
