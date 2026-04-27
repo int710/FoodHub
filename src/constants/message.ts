@@ -24,5 +24,7 @@ export const USER_MESSAGE = {
   EMAIL_IS_REQUIRED: 'Email is required',
   IF_EMAIL_EXISTS: 'If email exists, you will receive a reset link in a few minutes',
   FORGOT_PASSTOKEN_IS_INVALID: 'Forgot password token is invalid',
-  RESET_PASSWORD_SUCCESS: 'Reset password success'
+  RESET_PASSWORD_SUCCESS: 'Reset password success',
+  YOU_NEED_TO_LOGIN_ACCOUNT: 'You need to login account',
+  ACCESS_DENIED: 'You do not have permission to access this resource'
 }
