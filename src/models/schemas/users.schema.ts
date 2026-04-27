@@ -50,3 +50,30 @@ const verifyEmailSchema = z.object({
 })
 export const verifyEmailReq = z.object({ body: verifyEmailSchema })
 export type VerifyEmailReq = z.infer<typeof verifyEmailSchema>
+
+// email users
+const emailSchema = z.object({ email: z.email({ error: 'Email không hợp lệ' }).min(1) })
+export const emailReq = z.object({
+  body: emailSchema
+})
+export type EmailReqBody = z.infer<typeof emailSchema>
+
+// forgot password token
+const resetPasswordSchema = z
+  .object({
+    forgot_password_token: z.string({ error: 'Forgot password token is invalid' }),
+    new_password: z
+      .string()
+      .trim()
+      .min(6, 'Mật khẩu tối thiểu 6 kí tự')
+      .max(30, { error: 'Mật khẩu tối đa 30 kí tự' })
+      .regex(REGEX_PASSWORD, { error: ' Mật khẩu phải bao gồm chữ cái, số và kí tự đặc biệt' }),
+    confirmNewPassword: z.string({ error: 'Vui lòng xác nhận mật khẩu' }).trim()
+  })
+  .refine((data) => data.new_password === data.confirmNewPassword, {
+    error: 'Mật khẩu xác nhận không khớp',
+    path: ['confirmNewPassword']
+  })
+
+export const resetPasswordReq = z.object({ body: resetPasswordSchema })
+export type ResetPasswordReq = z.infer<typeof resetPasswordSchema>

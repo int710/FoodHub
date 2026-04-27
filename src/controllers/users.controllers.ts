@@ -6,10 +6,12 @@ import { ApiResponse } from '~/models/ApiResponse'
 import { ErrorWithStatus } from '~/models/Errors'
 import { TokenPayload } from '~/models/schemas/token.schema'
 import {
+  EmailReqBody,
   LoginReqBody,
   LogoutReqBody,
   RefreshTokenReq,
   RegisterRequestBody,
+  ResetPasswordReq,
   VerifyEmailReq
 } from '~/models/schemas/users.schema'
 import userServices from '~/services/users.services'
@@ -73,5 +75,25 @@ export const verifyEmailController = async (
 ) => {
   const { verify_email_token } = req.body
   const result = await userServices.verifyEmail(verify_email_token)
+  return res.json(ApiResponse(result, null))
+}
+
+export const forgotPasswordController = async (
+  req: Request<ParamsDictionary, any, EmailReqBody>,
+  res: Response,
+  next: NextFunction
+) => {
+  const { email } = req.body
+  const result = await userServices.forgotPassword(email)
+  return res.json(ApiResponse(result, null))
+}
+
+export const resetPasswordController = async (
+  req: Request<ParamsDictionary, any, ResetPasswordReq>,
+  res: Response,
+  next: NextFunction
+) => {
+  const { forgot_password_token, new_password } = req.body
+  const result = await userServices.resetPassword(forgot_password_token, new_password)
   return res.json(ApiResponse(result, null))
 }

@@ -9,7 +9,7 @@ import { SignTokenPayload } from '~/models/schemas/token.schema'
 import { RegisterRequestBody } from '~/models/schemas/users.schema'
 import { comparePassword, hashPassword } from '~/utils/crypto'
 import { signToken, verifyToken } from '~/utils/jwt'
-import { sendVerifyEmail } from '~/utils/send-email'
+import { sendEmailForgotPassword, sendVerifyEmail } from '~/utils/send-email'
 
 class UserServices {
   private signAccessToken(payload: SignTokenPayload) {
@@ -43,6 +43,14 @@ class UserServices {
       options: {
         expiresIn: '30d'
       }
+    })
+  }
+
+  private async genarateForgotPasswordToken(payload: SignTokenPayload) {
+    return signToken({
+      payload: { ...payload, token_type: TokenType.ForgotPasswordToken },
+      secretOrPrivateKey: process.env.SECRET_FORGOT_PASSWORD as string,
+      options: { expiresIn: '12h' }
     })
   }
 
@@ -257,6 +265,71 @@ class UserServices {
         await prisma.user.update({ where: { id: user.id }, data: { verifyEmailToken: null, isVerified: true } })
         return USER_MESSAGE.VERIFY_EMAIL_SUCCESS
       }
+    } catch (error) {
+      if (error instanceof JsonWebTokenError) {
+        throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.UNAUTHORIZED, message: error.message })
+      }
+      throw error
+    }
+  }
+
+  async forgotPassword(email: string) {
+    if (!email) {
+      throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.NOT_FOUND, message: USER_MESSAGE.EMAIL_IS_REQUIRED })
+    }
+    const user = await prisma.user.findUnique({ where: { email: email } })
+    if (user) {
+      const payload: SignTokenPayload = {
+        user_id: user.id,
+        email: user.email,
+        isVerified: user.isVerified,
+        role: user.role
+      }
+      const forgotPassToken = (await this.genarateForgotPasswordToken(payload)) as string
+      await prisma.user.update({ where: { id: user.id }, data: { forgotPasswordToken: forgotPassToken } })
+      sendEmailForgotPassword({ to: user.email, name: user.name, forgotPasswordToken: forgotPassToken })
+    }
+    return USER_MESSAGE.IF_EMAIL_EXISTS
+  }
+
+  async resetPassword(token: string, newPass: string) {
+    try {
+      const decoded_token = await verifyToken({
+        token,
+        secretOrPrivateKey: process.env.SECRET_FORGOT_PASSWORD as string
+      })
+      const user = await prisma.user.findUnique({ where: { id: decoded_token.user_id } })
+      if (!user) {
+        throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.NOT_FOUND, message: USER_MESSAGE.USER_NOT_FOUND })
+      }
+      if (decoded_token.token_type !== TokenType.ForgotPasswordToken) {
+        throw new ErrorWithStatus({
+          httpStatusCode: HTTP_STATUS.UNAUTHORIZED,
+          message: USER_MESSAGE.FORGOT_PASSTOKEN_IS_INVALID
+        })
+      }
+      if (user.forgotPasswordToken !== token) {
+        throw new ErrorWithStatus({
+          httpStatusCode: HTTP_STATUS.UNAUTHORIZED,
+          message: USER_MESSAGE.FORGOT_PASSTOKEN_IS_INVALID
+        })
+      }
+
+      Promise.all([
+        prisma.user.update({
+          where: { id: user.id },
+          data: {
+            password: await hashPassword(newPass),
+            forgotPasswordToken: null
+          }
+        }),
+        prisma.refreshToken.updateMany({
+          where: { userId: user.id, revokeAt: null },
+          data: { revokeAt: new Date(), revokeReason: 'RESET_PASSWORD' }
+        })
+      ])
+
+      return USER_MESSAGE.RESET_PASSWORD_SUCCESS
     } catch (error) {
       if (error instanceof JsonWebTokenError) {
         throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.UNAUTHORIZED, message: error.message })
