@@ -13,3 +13,26 @@ export const createTableController = async (
   const result = await tableServices.createNewTable(req.body)
   return res.json(ApiResponse(TABLE_MESSAGE.CREATE_NEW_TABLE_SUCCESS, result))
 }
+
+export const getTableByIdController = async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  const { id } = req.params
+  const result = await tableServices.getTableById(id)
+  return res.json(ApiResponse(TABLE_MESSAGE.GET_DETAIL_TABLE_SUCCESS, result))
+}
+
+export const getQRController = async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  const { id } = req.params
+  const result = await tableServices.getQR(id)
+  return res.json(ApiResponse(TABLE_MESSAGE.GET_QRCODE_SUCCESS, result))
+}
+
+export const regenerateQRController = async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  const { id } = req.params
+  const result = await tableServices.regenerateQR(id)
+  return res.json(ApiResponse(TABLE_MESSAGE.REGENERATE_QRCODE_TABLE_SUCCESS, result))
+}
+
+export const toggleController = async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
+  const result = await tableServices.toggleTable(req.params.id)
+  return res.json(ApiResponse(TABLE_MESSAGE.TOGGLE_TABLE_SUCCESS, result))
+}

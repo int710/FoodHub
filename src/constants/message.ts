@@ -31,5 +31,10 @@ export const USER_MESSAGE = {
 
 export const TABLE_MESSAGE = {
   TABLE_NAME_ALREADY_EXISTS: 'Table name already exists',
-  CREATE_NEW_TABLE_SUCCESS: 'Create new table success'
+  CREATE_NEW_TABLE_SUCCESS: 'Create new table success',
+  GET_DETAIL_TABLE_SUCCESS: 'Get detail table success',
+  TABLE_NOT_FOUND: 'Table not found',
+  GET_QRCODE_SUCCESS: 'Get QRCode success',
+  REGENERATE_QRCODE_TABLE_SUCCESS: 'Regenerate QRCode table success',
+  TOGGLE_TABLE_SUCCESS: 'Toggle success'
 }

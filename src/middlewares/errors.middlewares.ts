@@ -17,10 +17,11 @@ export const defaultErrorHandler = (err: any, req: Request, res: Response, next:
       Object.defineProperty(err, key, { enumerable: true })
     })
 
+    const { stack, ...errorInfo } = err
     return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: err.message || SYSTEM_MESSAGE.INTERNAL_SERVER_ERROR,
-      errorInfo: err // Tạm để debug, tắt đi khi lên production
+      errorInfo // Tạm để debug, tắt đi khi lên production
     })
   } catch (err) {
     return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
