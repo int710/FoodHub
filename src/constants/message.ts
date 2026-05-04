@@ -28,3 +28,8 @@ export const USER_MESSAGE = {
   YOU_NEED_TO_LOGIN_ACCOUNT: 'You need to login account',
   ACCESS_DENIED: 'You do not have permission to access this resource'
 }
+
+export const TABLE_MESSAGE = {
+  TABLE_NAME_ALREADY_EXISTS: 'Table name already exists',
+  CREATE_NEW_TABLE_SUCCESS: 'Create new table success'
+}
