@@ -34,5 +34,6 @@ export const regenerateQRController = async (req: Request<{ id: string }>, res: 
 
 export const toggleController = async (req: Request<{ id: string }>, res: Response, next: NextFunction) => {
   const result = await tableServices.toggleTable(req.params.id)
-  return res.json(ApiResponse(TABLE_MESSAGE.TOGGLE_TABLE_SUCCESS, result))
+  const msg = result.isActive ? 'Bàn đã mở lại' : 'Bàn đã tạm ngưng (bảo trì)'
+  return res.json(ApiResponse(msg, result))
 }
