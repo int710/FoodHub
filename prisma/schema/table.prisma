@@ -9,6 +9,7 @@ model Table {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  orders Order[]
   @@index([qrToken])
   @@index([isActive])
   @@map("tables") // Map tên bảng trong DB là "tables" (số nhiều)

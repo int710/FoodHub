@@ -23,6 +23,11 @@ model User {
   updatedAt           DateTime  @updatedAt @map("updated_at") 
 
   refreshToken RefreshToken[]
+
+  orders Order[] @relation("CustomerOrders")
+  confirmedOrders Order[] @relation("ConfirmedByStaff")
+  reviews Review[]
+  flashSales FlashSale[]
   
   @@index([email])
   @@index([role])
