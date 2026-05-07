@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express'
 import HTTP_STATUS from '~/constants/httpStatus'
 import { SYSTEM_MESSAGE } from '~/constants/message'
+import { Prisma } from '~/generated/prisma/client'
 import { ApiResponse } from '~/models/ApiResponse'
 import { EntityError, ErrorWithStatus } from '~/models/Errors'
 
@@ -10,6 +11,17 @@ export const defaultErrorHandler = (err: any, req: Request, res: Response, next:
     if (err instanceof ErrorWithStatus) {
       const payload = err instanceof EntityError ? { errors: err.errors } : undefined
       return res.status(err.httpStatusCode).json({ success: false, message: err.message, data: payload })
+    }
+
+    if (err instanceof Prisma.PrismaClientKnownRequestError) {
+      const meta = err.meta as any
+      const msg =
+        meta?.driverAdapterError?.cause?.originalMessage || meta?.cause || err.message || 'Database error occurred'
+      return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
+        success: false,
+        message: msg,
+        data: err
+      })
     }
 
     // Nếu là lỗi không lường trước (tránh treo API)

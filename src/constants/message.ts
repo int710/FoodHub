@@ -40,3 +40,11 @@ export const TABLE_MESSAGE = {
   QR_CODE_INVALID: 'QR Code invalid',
   SCAN_QRCODE_SUCCESS: 'Scan QRCode success'
 }
+
+export const MENU_MESSAGE = {
+  CREATE_CATEGORY_SUCCESS: 'Create category success',
+  GET_ALL_CATEGORIES_SUCCESS: 'Get all categories success',
+  UPDATE_MENU_SUCCESS: 'Update menu success',
+  MENU_NOT_FOUND: 'Menu category not found',
+  DELETE_CAT_SUCCESS: 'Delete category success'
+}
