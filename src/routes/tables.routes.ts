@@ -3,6 +3,7 @@ import {
   createTableController,
   getQRController,
   getTableByIdController,
+  qrScanController,
   regenerateQRController,
   toggleController
 } from '~/controllers/tables.controllers'
@@ -17,5 +18,6 @@ tablesRouter.post('/new', authenticate, requireRole('ADMIN'), requestHandler(cre
 tablesRouter.get('/:id/qr', authenticate, requireRole('ADMIN'), requestHandler(getQRController))
 tablesRouter.post('/:id/regenerate-qr', authenticate, requireRole('ADMIN'), requestHandler(regenerateQRController))
 tablesRouter.patch('/:id/toggle', authenticate, requireRole('ADMIN'), requestHandler(toggleController))
+tablesRouter.post('/scan', requestHandler(qrScanController))
 
 export default tablesRouter

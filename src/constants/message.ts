@@ -36,5 +36,7 @@ export const TABLE_MESSAGE = {
   TABLE_NOT_FOUND: 'Table not found',
   GET_QRCODE_SUCCESS: 'Get QRCode success',
   REGENERATE_QRCODE_TABLE_SUCCESS: 'Regenerate QRCode table success',
-  TOGGLE_TABLE_SUCCESS: 'Toggle success'
+  TOGGLE_TABLE_SUCCESS: 'Toggle success',
+  QR_CODE_INVALID: 'QR Code invalid',
+  SCAN_QRCODE_SUCCESS: 'Scan QRCode success'
 }

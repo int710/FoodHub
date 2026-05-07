@@ -1,9 +1,12 @@
 import { randomUUID } from 'crypto'
 import { prisma } from '~/config/prisma'
+import { redis } from '~/config/redis'
+import { TABLE_SESSION_TTL } from '~/constants/enums'
 import HTTP_STATUS from '~/constants/httpStatus'
 import { TABLE_MESSAGE } from '~/constants/message'
 import { ErrorWithStatus } from '~/models/Errors'
 import { TableReqBody } from '~/models/schemas/table.schema'
+import { signToken } from '~/utils/jwt'
 import { generateQR } from '~/utils/QRCode'
 
 class TableServices {
@@ -83,6 +86,75 @@ class TableServices {
       data: { isActive: !table.isActive },
       select: { id: true, name: true, isActive: true }
     })
+  }
+
+  async scanQR(qrToken: string) {
+    const table = await prisma.table.findUnique({
+      where: { qrToken },
+      include: {
+        orders: {
+          where: { status: { in: ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'SERVED'] } },
+          select: { id: true, status: true },
+          take: 1
+        }
+      }
+    })
+
+    if (!table) {
+      throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.NOT_FOUND, message: TABLE_MESSAGE.QR_CODE_INVALID })
+    }
+    if (!table.isActive) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.BAD_REQUEST,
+        message: 'Bàn đang tạm ngưng hoạt động, vui lòng liên hệ nhân viên !'
+      })
+    }
+
+    // Check xem bàn đã có người ngồi chưa
+    const isOccupied = table.orders.length > 0
+    if (isOccupied) {
+      const availableTables = await prisma.table.findMany({
+        where: {
+          isActive: true,
+          id: { not: table.id },
+          orders: { none: { status: { in: ['PENDING', 'PREPARING', 'CONFIRMED', 'SERVED', 'READY'] } } }
+        },
+        select: { id: true, name: true, capacity: true, floor: true },
+        orderBy: { name: 'asc' }
+      })
+
+      return {
+        occupied: true,
+        table: { id: table.id, name: table.name, capacity: table.capacity },
+        tableToken: null,
+        message: `Bàn ${table.name} đang có khách rồi, bạn vui lòng chọn bàn khác !`,
+        availableTables
+      }
+    }
+
+    const sessionId = randomUUID()
+    const [tableToken] = await Promise.all([
+      signToken({
+        payload: { tableId: table.id, name: table.name, sessionId: sessionId },
+        secretOrPrivateKey: process.env.SECRET_TABLE_TOKEN as string,
+        options: { expiresIn: '8h' }
+      }),
+      redis.set(`table:session:${sessionId}`, table.id, TABLE_SESSION_TTL)
+    ])
+
+    return {
+      occupied: false,
+      table: {
+        id: table.id,
+        name: table.name,
+        capacity: table.capacity,
+        floor: table.floor
+      },
+      tableToken,
+      sessionId,
+      expiresIn: TABLE_SESSION_TTL,
+      message: `Chào mừng bạn đến ${table.name}`
+    }
   }
 }
 

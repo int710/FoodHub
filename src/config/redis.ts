@@ -29,7 +29,7 @@ class RedisClient {
     })
 
     // Theo dõi status redis và ghi log
-    this.client.on('connect', () => console.log('Redis connected'))
+    this.client.on('connect', () => console.log('Connected redis successfully !'))
     this.client.on('ready', () => {
       this.isReady = true
       console.log('Redis is ready')
