@@ -4,7 +4,6 @@ import { ParamsDictionary } from 'express-serve-static-core'
 import { ApiResponse } from '~/models/ApiResponse'
 import tableServices from '~/services/tables.services'
 import { TABLE_MESSAGE } from '~/constants/message'
-import da from 'zod/v4/locales/da.js'
 
 export const createTableController = async (
   req: Request<ParamsDictionary, any, TableReqBody>,
