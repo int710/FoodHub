@@ -34,23 +34,28 @@
     "typescript-eslint": "^8.58.2"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1044.0",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
     "@types/bcrypt": "^6.0.0",
+    "@types/formidable": "^3.5.1",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/qrcode": "^1.5.6",
     "bcrypt": "^6.0.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "formidable": "^3.5.4",
     "fs": "^0.0.1-security",
     "handlebars": "^4.7.9",
     "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.3",
+    "mime": "^4.1.0",
     "mongoose": "^9.4.1",
     "path": "^0.12.7",
     "pg": "^8.20.0",
     "qrcode": "^1.5.4",
     "resend": "^6.12.2",
+    "sharp": "^0.34.5",
     "zod": "^4.3.6"
   }
 }
