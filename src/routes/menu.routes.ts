@@ -8,6 +8,7 @@ import { requestHandler } from '~/utils/requestHandler'
 
 const menusRouter = Router()
 
+menusRouter.get('/categories', requestHandler(menusController.getAllCategory))
 menusRouter.post(
   '/categories',
   authenticate,
@@ -15,7 +16,6 @@ menusRouter.post(
   validate(menuRequestBody),
   requestHandler(menusController.createCategory)
 )
-menusRouter.get('/categories', requestHandler(menusController.getAllCategory))
 menusRouter.put(
   '/categories/:id',
   authenticate,
@@ -29,4 +29,5 @@ menusRouter.delete(
   requireRole('ADMIN'),
   requestHandler(menusController.deleteCategory)
 )
+
 export default menusRouter
