@@ -13,8 +13,8 @@ export const handleUploadImage = (req: Request) => {
   const form = formidable({
     uploadDir: UPLOAD_IMAGE_DIR,
     maxFiles: 3,
-    maxFileSize: 2 * 1024 * 1024, // 2MB
-    maxTotalFileSize: 2 * 1024 * 1024 * 3, //6 MB total
+    maxFileSize: 5 * 1024 * 1024, // 2MB
+    maxTotalFileSize: 5 * 1024 * 1024 * 3, //6 MB total
     keepExtensions: true,
     filter: function ({ mimetype }) {
       const valid = Boolean(mimetype && mimetype.includes('image'))

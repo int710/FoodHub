@@ -3,7 +3,7 @@ import { menusController } from '~/controllers/menu.controllers'
 import { authenticate } from '~/middlewares/auth.middlewares'
 import { requireRole } from '~/middlewares/rbac.middlewares'
 import { validate } from '~/middlewares/validate'
-import { menuRequestBody } from '~/models/schemas/menu.schema'
+import { createMenuItemBody, getItemsQuery, menuRequestBody, updateMenuItemSchema } from '~/models/schemas/menu.schema'
 import { requestHandler } from '~/utils/requestHandler'
 
 const menusRouter = Router()
@@ -28,6 +28,28 @@ menusRouter.delete(
   authenticate,
   requireRole('ADMIN'),
   requestHandler(menusController.deleteCategory)
+)
+menusRouter.post(
+  '/items',
+  authenticate,
+  requireRole('ADMIN'),
+  validate(createMenuItemBody),
+  requestHandler(menusController.createMenuItem)
+)
+menusRouter.patch(
+  '/items/:id',
+  authenticate,
+  requireRole('ADMIN'),
+  validate(updateMenuItemSchema),
+  requestHandler(menusController.updateMenuItem)
+)
+
+menusRouter.get(
+  '/items',
+  authenticate,
+  requireRole('ADMIN', 'STAFF'),
+  validate(getItemsQuery),
+  requestHandler(menusController.getAllItems)
 )
 
 export default menusRouter

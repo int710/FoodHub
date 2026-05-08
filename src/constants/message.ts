@@ -43,8 +43,13 @@ export const TABLE_MESSAGE = {
 
 export const MENU_MESSAGE = {
   CREATE_CATEGORY_SUCCESS: 'Create category success',
+  CREATE_MENU_ITEM_SUCCESS: 'Create menu item success',
   GET_ALL_CATEGORIES_SUCCESS: 'Get all categories success',
   UPDATE_MENU_SUCCESS: 'Update menu success',
   MENU_NOT_FOUND: 'Menu category not found',
-  DELETE_CAT_SUCCESS: 'Delete category success'
+  DELETE_CAT_SUCCESS: 'Delete category success',
+  CATEGORY_IS_INVALID: 'Category is invalid',
+  UPDATE_ITEM_SUCCESS: 'Update item menu success',
+  ITEM_IS_INVALID: 'Item is invalid',
+  GET_ALL_ITEMS_SUCCESS: 'Get all items success'
 }
