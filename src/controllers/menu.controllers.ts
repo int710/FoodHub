@@ -2,7 +2,13 @@ import { Request, Response } from 'express'
 import { ParamsDictionary } from 'express-serve-static-core'
 import { MENU_MESSAGE } from '~/constants/message'
 import { ApiResponse } from '~/models/ApiResponse'
-import { CategoryBody } from '~/models/schemas/menu.schema'
+import {
+  CategoryBody,
+  CreateMenuItemRequest,
+  GetAllItemsQueryType,
+  getItemsQuery,
+  UpdateMenuItemRequestBody
+} from '~/models/schemas/menu.schema'
 import { menusServices } from '~/services/menu.services'
 
 export const menusController = {
@@ -24,5 +30,21 @@ export const menusController = {
   async deleteCategory(req: Request<{ id: string }>, res: Response) {
     await menusServices.deleteCategory(req.params.id)
     return res.json(ApiResponse(MENU_MESSAGE.DELETE_CAT_SUCCESS, null))
+  },
+
+  async createMenuItem(req: Request<ParamsDictionary, any, CreateMenuItemRequest>, res: Response) {
+    const result = await menusServices.createMenuItem(req.body)
+    return res.json(ApiResponse(MENU_MESSAGE.CREATE_MENU_ITEM_SUCCESS, result))
+  },
+
+  async updateMenuItem(req: Request<{ id: string }, any, UpdateMenuItemRequestBody>, res: Response) {
+    const result = await menusServices.updateMenuItem(req.params.id, req.body)
+    return res.json(ApiResponse(MENU_MESSAGE.UPDATE_ITEM_SUCCESS, result))
+  },
+
+  async getAllItems(req: Request, res: Response) {
+    const { query } = getItemsQuery.parse({ query: req.query })
+    const result = await menusServices.getAllItems(query)
+    return res.json(ApiResponse(MENU_MESSAGE.GET_ALL_ITEMS_SUCCESS, result))
   }
 }
