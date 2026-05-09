@@ -52,4 +52,13 @@ menusRouter.get(
   requestHandler(menusController.getAllItems)
 )
 
+menusRouter.patch(
+  '/items/:id/toggle',
+  authenticate,
+  requireRole('ADMIN', 'STAFF'),
+  requestHandler(menusController.toggleItem)
+)
+
+menusRouter.delete('/items/:id', authenticate, requireRole('ADMIN'), requestHandler(menusController.deleteItem))
+
 export default menusRouter

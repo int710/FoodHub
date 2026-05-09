@@ -106,6 +106,37 @@ class MenuServices {
       totalPages: Math.ceil(total / limit)
     }
   }
+
+  async toggleItem(id: string) {
+    const item = await prisma.menuItem.findUnique({ where: { id } })
+    if (!item) {
+      throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.NOT_FOUND, message: MENU_MESSAGE.ITEM_NOT_FOUND })
+    }
+    const itemAvailable = await prisma.menuItem.update({
+      where: { id },
+      data: { isAvailable: !item.isAvailable },
+      select: { id: true, name: true, isAvailable: true }
+    })
+    return itemAvailable
+  }
+
+  async deleteItem(id: string) {
+    const activeOrderCount = await prisma.orderItem.count({
+      where: { menuItemId: id, order: { status: { in: ['CONFIRMED', 'PENDING', 'PREPARING', 'READY', 'SERVED'] } } }
+    })
+
+    if (activeOrderCount > 0) {
+      await prisma.menuItem.update({ where: { id }, data: { isAvailable: false } })
+      return {
+        deleted: false,
+        hidden: true,
+        message: 'Không xóa ngay lập tức. Sản phầm tạm thời sẽ bị ẩn đi vì xuất hiện trong order của khách hàng'
+      }
+    }
+
+    await prisma.menuItem.delete({ where: { id } })
+    return { deleted: true, hidden: false, message: 'Đã xóa món ăn' }
+  }
 }
 
 export const menusServices = new MenuServices()
