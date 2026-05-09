@@ -51,5 +51,7 @@ export const MENU_MESSAGE = {
   CATEGORY_IS_INVALID: 'Category is invalid',
   UPDATE_ITEM_SUCCESS: 'Update item menu success',
   ITEM_IS_INVALID: 'Item is invalid',
-  GET_ALL_ITEMS_SUCCESS: 'Get all items success'
+  GET_ALL_ITEMS_SUCCESS: 'Get all items success',
+  ITEM_NOT_FOUND: 'Item not found',
+  DELETE_ITEM_SUCCESS: 'Delete item success'
 }
