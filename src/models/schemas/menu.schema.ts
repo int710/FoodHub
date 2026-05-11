@@ -1,4 +1,5 @@
 import z from 'zod'
+import { VariantType } from '~/generated/prisma/enums'
 
 export const menuRequestBody = z.object({
   body: z.object({
@@ -57,3 +58,29 @@ export const getItemsQuery = z.object({
   })
 })
 export type GetAllItemsQueryType = z.infer<typeof getItemsQuery>['query']
+
+const variantOptions = z.object({
+  id: z.cuid({ message: 'Id không hợp lệ' }).optional(),
+  name: z.string().min(1, 'Tên phần tùy chọn không được để trống'),
+  priceAdd: z.number().min(0, 'Giá cộng thêm không được âm').default(0),
+  sortOrder: z.number().int().optional().default(0),
+  isActive: z.boolean().default(true).optional()
+})
+
+export const variantGroupItemSchema = z.object({
+  params: z.object({ idItem: z.cuid({ message: 'Id item không hợp lệ' }) }),
+  body: z.object({
+    name: z.string().min(1, 'Tên nhóm biến thể không được để trống'),
+    type: z.enum(VariantType).default(VariantType.SINGLE),
+    isRequired: z.boolean().default(true),
+    sortOrder: z.number().int().default(0),
+    options: z.array(variantOptions).min(1, 'Phải có ít nhất một tùy chọn')
+  })
+})
+export type VariantGroupRequestType = z.infer<typeof variantGroupItemSchema>['body']
+
+export const updateVariantGroupItem = z.object({
+  params: z.object({ groupVariantId: z.cuid({ message: 'Id group variant item không hợp lệ' }) }),
+  body: variantGroupItemSchema.shape.body.partial()
+})
+export type UpdateVariantGroupInput = z.infer<typeof updateVariantGroupItem>['body']

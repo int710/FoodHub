@@ -53,5 +53,7 @@ export const MENU_MESSAGE = {
   ITEM_IS_INVALID: 'Item is invalid',
   GET_ALL_ITEMS_SUCCESS: 'Get all items success',
   ITEM_NOT_FOUND: 'Item not found',
-  DELETE_ITEM_SUCCESS: 'Delete item success'
+  DELETE_ITEM_SUCCESS: 'Delete item success',
+  CREATE_VARIANT_SUCCESS: 'Create variants success',
+  VARIANT_GROUP_NOT_EXISTS: 'Variant group by id not exists'
 }

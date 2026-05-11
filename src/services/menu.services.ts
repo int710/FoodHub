@@ -1,3 +1,4 @@
+import id from 'zod/v4/locales/id.js'
 import { prisma } from '~/config/prisma'
 import HTTP_STATUS from '~/constants/httpStatus'
 import { MENU_MESSAGE } from '~/constants/message'
@@ -6,7 +7,9 @@ import {
   CategoryBody,
   CreateMenuItemRequest,
   GetAllItemsQueryType,
-  UpdateMenuItemRequestBody
+  UpdateMenuItemRequestBody,
+  UpdateVariantGroupInput,
+  VariantGroupRequestType
 } from '~/models/schemas/menu.schema'
 
 class MenuServices {
@@ -136,6 +139,83 @@ class MenuServices {
 
     await prisma.menuItem.delete({ where: { id } })
     return { deleted: true, hidden: false, message: 'Đã xóa món ăn' }
+  }
+
+  async createVariant(itemId: string, dto: VariantGroupRequestType) {
+    const item = await prisma.menuItem.findUnique({ where: { id: itemId } })
+    if (!item) {
+      throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.BAD_REQUEST, message: MENU_MESSAGE.ITEM_IS_INVALID })
+    }
+
+    const group = await prisma.variantGroup.create({
+      data: {
+        itemId,
+        name: dto.name,
+        type: dto.type,
+        isRequired: dto.isRequired,
+        sortOrder: dto.sortOrder,
+        options: {
+          create: dto.options.map((o, i) => ({
+            name: o.name,
+            priceAdd: o.priceAdd,
+            sortOrder: o.sortOrder ?? i
+          }))
+        }
+      },
+      include: { options: { orderBy: { sortOrder: 'asc' } } }
+    })
+
+    return group
+  }
+
+  async updateVariantGroup(groupVariantId: string, dto: UpdateVariantGroupInput) {
+    const group = await prisma.variantGroup.findUnique({ where: { id: groupVariantId } })
+    if (!group) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.BAD_REQUEST,
+        message: MENU_MESSAGE.VARIANT_GROUP_NOT_EXISTS
+      })
+    }
+
+    const updated = await prisma.variantGroup.update({
+      where: { id: groupVariantId },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.isRequired !== undefined && { isRequired: dto.isRequired }),
+        ...(dto.type !== undefined && { type: dto.type }),
+        ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
+        ...(dto.options && {
+          options: {
+            // update option đã có id tồn tại
+            upsert: dto.options
+              .filter((o) => o.id)
+              .map((o, i) => ({
+                where: { id: o.id! },
+                update: {
+                  name: o.name,
+                  priceAdd: o.priceAdd,
+                  sortOrder: o.sortOrder ?? i
+                },
+                create: {
+                  name: o.name,
+                  priceAdd: o.priceAdd,
+                  sortOrder: o.sortOrder ?? i
+                }
+              })),
+            create: dto.options
+              .filter((o) => !o.id)
+              .map((o) => ({
+                name: o.name!,
+                priceAdd: o.priceAdd ?? 0,
+                sortOrder: o.sortOrder ?? 0,
+                isActive: true
+              }))
+          }
+        })
+      },
+      include: { options: { orderBy: { sortOrder: 'asc' } } }
+    })
+    return updated
   }
 }
 
