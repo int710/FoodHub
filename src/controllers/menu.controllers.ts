@@ -58,5 +58,15 @@ export const menusController = {
   async deleteItem(req: Request<{ id: string }>, res: Response) {
     const data = await menusServices.deleteItem(req.params.id)
     return res.json(ApiResponse(MENU_MESSAGE.DELETE_ITEM_SUCCESS, data))
+  },
+
+  async createVariant(req: Request<{ idItem: string }>, res: Response) {
+    const data = await menusServices.createVariant(req.params.idItem, req.body)
+    return res.json(ApiResponse(MENU_MESSAGE.CREATE_VARIANT_SUCCESS, data))
+  },
+
+  async updateVariantItem(req: Request<{ groupVariantId: string }>, res: Response) {
+    const data = await menusServices.updateVariantGroup(req.params.groupVariantId, req.body)
+    return res.json(ApiResponse(MENU_MESSAGE.CREATE_VARIANT_SUCCESS, data))
   }
 }

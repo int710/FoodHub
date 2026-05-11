@@ -3,7 +3,14 @@ import { menusController } from '~/controllers/menu.controllers'
 import { authenticate } from '~/middlewares/auth.middlewares'
 import { requireRole } from '~/middlewares/rbac.middlewares'
 import { validate } from '~/middlewares/validate'
-import { createMenuItemBody, getItemsQuery, menuRequestBody, updateMenuItemSchema } from '~/models/schemas/menu.schema'
+import {
+  createMenuItemBody,
+  getItemsQuery,
+  menuRequestBody,
+  updateMenuItemSchema,
+  updateVariantGroupItem,
+  variantGroupItemSchema
+} from '~/models/schemas/menu.schema'
 import { requestHandler } from '~/utils/requestHandler'
 
 const menusRouter = Router()
@@ -60,5 +67,22 @@ menusRouter.patch(
 )
 
 menusRouter.delete('/items/:id', authenticate, requireRole('ADMIN'), requestHandler(menusController.deleteItem))
+
+// Phần api cho variant group
+menusRouter.post(
+  '/items/:idItem/variants',
+  authenticate,
+  requireRole('ADMIN'),
+  validate(variantGroupItemSchema),
+  requestHandler(menusController.createVariant)
+)
+
+menusRouter.patch(
+  '/item-variants/:groupVariantId',
+  authenticate,
+  requireRole('ADMIN'),
+  validate(updateVariantGroupItem),
+  requestHandler(menusController.updateVariantItem)
+)
 
 export default menusRouter
