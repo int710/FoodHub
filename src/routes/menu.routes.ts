@@ -4,6 +4,7 @@ import { authenticate } from '~/middlewares/auth.middlewares'
 import { requireRole } from '~/middlewares/rbac.middlewares'
 import { validate } from '~/middlewares/validate'
 import {
+  createFlashSaleSchema,
   createMenuItemBody,
   getItemsQuery,
   menuRequestBody,
@@ -83,6 +84,21 @@ menusRouter.patch(
   requireRole('ADMIN'),
   validate(updateVariantGroupItem),
   requestHandler(menusController.updateVariantItem)
+)
+
+menusRouter.post(
+  '/item/flash-sales',
+  authenticate,
+  requireRole('ADMIN'),
+  validate(createFlashSaleSchema),
+  requestHandler(menusController.createFlashSale)
+)
+
+menusRouter.delete(
+  '/item/flash-sales/:itemId',
+  authenticate,
+  requireRole('ADMIN'),
+  requestHandler(menusController.deleteFlashSale)
 )
 
 export default menusRouter

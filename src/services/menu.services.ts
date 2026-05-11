@@ -5,6 +5,7 @@ import { MENU_MESSAGE } from '~/constants/message'
 import { ErrorWithStatus } from '~/models/Errors'
 import {
   CategoryBody,
+  CreateFlashSalesType,
   CreateMenuItemRequest,
   GetAllItemsQueryType,
   UpdateMenuItemRequestBody,
@@ -216,6 +217,39 @@ class MenuServices {
       include: { options: { orderBy: { sortOrder: 'asc' } } }
     })
     return updated
+  }
+
+  async createFlashSales(accountId: string, dto: CreateFlashSalesType) {
+    const item = await prisma.menuItem.findUnique({ where: { id: dto.itemId } })
+    if (!item) {
+      throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.BAD_REQUEST, message: MENU_MESSAGE.ITEM_IS_INVALID })
+    }
+
+    const salePrice = Number(item.basePrice) * (1 - dto.discountPercent / 100)
+    const sales = await prisma.flashSale.upsert({
+      where: { itemId: dto.itemId },
+      create: {
+        itemId: dto.itemId,
+        discountPercent: dto.discountPercent,
+        startsAt: new Date(dto.startsAt),
+        endsAt: new Date(dto.endsAt),
+        isActive: true,
+        createdById: accountId
+      },
+      update: {
+        discountPercent: dto.discountPercent,
+        startsAt: new Date(dto.startsAt),
+        endsAt: new Date(dto.endsAt),
+        isActive: true,
+        createdById: accountId
+      }
+    })
+
+    return { ...sales, itemName: item.name, salePrice: Math.round(salePrice) }
+  }
+
+  async deleteFlashSale(itemId: string) {
+    await prisma.flashSale.delete({ where: { itemId } })
   }
 }
 

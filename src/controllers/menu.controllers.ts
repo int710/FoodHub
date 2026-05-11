@@ -5,6 +5,7 @@ import { MENU_MESSAGE } from '~/constants/message'
 import { ApiResponse } from '~/models/ApiResponse'
 import {
   CategoryBody,
+  CreateFlashSalesType,
   CreateMenuItemRequest,
   GetAllItemsQueryType,
   getItemsQuery,
@@ -68,5 +69,15 @@ export const menusController = {
   async updateVariantItem(req: Request<{ groupVariantId: string }>, res: Response) {
     const data = await menusServices.updateVariantGroup(req.params.groupVariantId, req.body)
     return res.json(ApiResponse(MENU_MESSAGE.CREATE_VARIANT_SUCCESS, data))
+  },
+
+  async createFlashSale(req: Request<ParamsDictionary, any, CreateFlashSalesType>, res: Response) {
+    const data = await menusServices.createFlashSales(req.decoded_authorization?.user_id as string, req.body)
+    return res.json(ApiResponse(MENU_MESSAGE.CREATE_FLASHSALES_SUCCESS, data))
+  },
+
+  async deleteFlashSale(req: Request<{ itemId: string }>, res: Response) {
+    await menusServices.deleteFlashSale(req.params.itemId)
+    return res.json(ApiResponse(MENU_MESSAGE.DELETE_FLASHSALE_SUCCESS, null))
   }
 }

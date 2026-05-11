@@ -84,3 +84,21 @@ export const updateVariantGroupItem = z.object({
   body: variantGroupItemSchema.shape.body.partial()
 })
 export type UpdateVariantGroupInput = z.infer<typeof updateVariantGroupItem>['body']
+
+export const createFlashSaleSchema = z.object({
+  body: z
+    .object({
+      itemId: z.cuid({ message: 'Id sản phẩm không hợp lệ' }).min(1),
+      discountPercent: z.number().min(0.01, 'Giảm giá ít nhất 0.01%').max(100, 'Giảm giá không được phép quá 100%'),
+      startsAt: z.iso.datetime(),
+      endsAt: z.iso.datetime(),
+      isActive: z.boolean().optional().default(true),
+      createdById: z.string().min(1, 'Không được bỏ trống ID người tạo flash-sales').optional()
+    })
+    .refine((date) => new Date(date.endsAt) > new Date(date.startsAt), {
+      error: 'Thời gian kết thúc phải sau khi thời gian bắt đầu',
+      path: ['endsAt']
+    })
+})
+
+export type CreateFlashSalesType = z.infer<typeof createFlashSaleSchema>['body']
