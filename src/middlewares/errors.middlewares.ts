@@ -16,7 +16,9 @@ export const defaultErrorHandler = (err: any, req: Request, res: Response, next:
     if (err instanceof Prisma.PrismaClientKnownRequestError) {
       const meta = err.meta as any
       const msg =
-        meta?.driverAdapterError?.cause?.originalMessage || meta?.cause || err.message || 'Database error occurred'
+        err.code === 'P2025'
+          ? 'Không tìm thấy bản ghi trong cơ sở dữ liệu để thực hiện truy vấn'
+          : meta?.driverAdapterError?.cause?.originalMessage || meta?.cause || err.message || 'Database error occurred'
       return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
         success: false,
         message: msg,
