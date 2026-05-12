@@ -16,6 +16,8 @@ import { requestHandler } from '~/utils/requestHandler'
 
 const menusRouter = Router()
 
+menusRouter.get('/all', requestHandler(menusController.getPublicAll))
+menusRouter.get('/item/:id', requestHandler(menusController.getItemDetail))
 menusRouter.get('/categories', requestHandler(menusController.getAllCategory))
 menusRouter.post(
   '/categories',

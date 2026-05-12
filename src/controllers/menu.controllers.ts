@@ -1,19 +1,22 @@
 import { Request, Response } from 'express'
 import { ParamsDictionary } from 'express-serve-static-core'
-import ms from 'zod/v4/locales/ms.js'
 import { MENU_MESSAGE } from '~/constants/message'
 import { ApiResponse } from '~/models/ApiResponse'
 import {
   CategoryBody,
   CreateFlashSalesType,
   CreateMenuItemRequest,
-  GetAllItemsQueryType,
   getItemsQuery,
   UpdateMenuItemRequestBody
 } from '~/models/schemas/menu.schema'
 import { menusServices } from '~/services/menu.services'
 
 export const menusController = {
+  async getPublicAll(req: Request, res: Response) {
+    const data = await menusServices.getAll()
+    return res.json(ApiResponse(MENU_MESSAGE.GET_ALL_SUCCESS, data))
+  },
+
   async getAllCategory(req: Request, res: Response) {
     const result = await menusServices.getAllCategories()
     return res.json(ApiResponse(MENU_MESSAGE.GET_ALL_CATEGORIES_SUCCESS, result))
@@ -79,5 +82,10 @@ export const menusController = {
   async deleteFlashSale(req: Request<{ itemId: string }>, res: Response) {
     await menusServices.deleteFlashSale(req.params.itemId)
     return res.json(ApiResponse(MENU_MESSAGE.DELETE_FLASHSALE_SUCCESS, null))
+  },
+
+  async getItemDetail(req: Request<{ id: string }>, res: Response) {
+    const data = await menusServices.getItemDetail(req.params.id)
+    return res.json(ApiResponse(MENU_MESSAGE.GET_ALL_SUCCESS, data))
   }
 }

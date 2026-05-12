@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { prisma } from '~/config/prisma'
 import { redis } from '~/config/redis'
-import { TABLE_SESSION_TTL } from '~/constants/enums'
+import { TABLE_SESSION_TTL } from '~/constants/const'
 import HTTP_STATUS from '~/constants/httpStatus'
 import { TABLE_MESSAGE } from '~/constants/message'
 import { ErrorWithStatus } from '~/models/Errors'
