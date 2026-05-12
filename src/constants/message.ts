@@ -57,5 +57,6 @@ export const MENU_MESSAGE = {
   CREATE_VARIANT_SUCCESS: 'Create variants success',
   VARIANT_GROUP_NOT_EXISTS: 'Variant group by id not exists',
   CREATE_FLASHSALES_SUCCESS: 'Create flash sales success',
-  DELETE_FLASHSALE_SUCCESS: 'Delete flash sales success'
+  DELETE_FLASHSALE_SUCCESS: 'Delete flash sales success',
+  GET_ALL_SUCCESS: 'Get all menu success'
 }

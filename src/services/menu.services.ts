@@ -1,5 +1,6 @@
-import id from 'zod/v4/locales/id.js'
 import { prisma } from '~/config/prisma'
+import { redis } from '~/config/redis'
+import { ITEM_TTL, MENU_ALL_ITEMS_TTL, MENU_CACHE_KEY } from '~/constants/const'
 import HTTP_STATUS from '~/constants/httpStatus'
 import { MENU_MESSAGE } from '~/constants/message'
 import { ErrorWithStatus } from '~/models/Errors'
@@ -14,6 +15,75 @@ import {
 } from '~/models/schemas/menu.schema'
 
 class MenuServices {
+  private async invalidateMenuCache(): Promise<void> {
+    await redis.del(MENU_CACHE_KEY)
+  }
+
+  private async invalidateItemCache(itemId: string): Promise<void> {
+    await redis.del(`menu:item:${itemId}`)
+    await this.invalidateMenuCache()
+  }
+
+  async getAll() {
+    const cached = await redis.get(MENU_CACHE_KEY)
+    if (cached) return cached
+
+    const categories = await prisma.menuCategory.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+      include: {
+        item: {
+          where: {
+            isAvailable: true
+          },
+          orderBy: { sortOrder: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            basePrice: true,
+            image: true,
+            totalOrder: true,
+            avgRating: true,
+            sortOrder: true,
+            flashSale: {
+              where: { isActive: true, startsAt: { lte: new Date() }, endsAt: { gte: new Date() } }
+            }
+          }
+        }
+      }
+    })
+
+    const menu = categories.map((cat) => ({
+      id: cat.id,
+      name: cat.name,
+      icon: cat.icon,
+      isActive: cat.isActive,
+      sortOrder: cat.sortOrder,
+      items: cat.item.map((item) => {
+        const sale = item.flashSale
+        const salePrice = sale
+          ? parseFloat((Number(item.basePrice) * (1 - Number(sale.discountPercent) / 100)).toFixed(0))
+          : null
+
+        return {
+          id: item.id,
+          name: item.name,
+          basePrice: item.basePrice,
+          salePrice: salePrice,
+          salePercent: sale?.discountPercent ?? null,
+          saleEndsAt: sale?.endsAt ?? null,
+          image: item.image,
+          totalOrder: item.totalOrder,
+          avgRating: item.avgRating,
+          sortOrder: item.sortOrder
+        }
+      })
+    }))
+
+    await redis.set(MENU_CACHE_KEY, menu, MENU_ALL_ITEMS_TTL)
+    return menu
+  }
+
   async getAllCategories() {
     return prisma.menuCategory.findMany({
       orderBy: { sortOrder: 'asc' },
@@ -25,6 +95,8 @@ class MenuServices {
     const category = await prisma.menuCategory.create({
       data
     })
+    this.invalidateMenuCache()
+
     return category
   }
 
@@ -36,6 +108,8 @@ class MenuServices {
         message: MENU_MESSAGE.MENU_NOT_FOUND
       })
     }
+    this.invalidateMenuCache()
+
     return prisma.menuCategory.update({
       where: { id },
       data
@@ -57,6 +131,8 @@ class MenuServices {
     }
 
     await prisma.menuCategory.delete({ where: { id } })
+
+    this.invalidateMenuCache()
   }
 
   async createMenuItem(data: CreateMenuItemRequest) {
@@ -75,6 +151,8 @@ class MenuServices {
       throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.NOT_FOUND, message: MENU_MESSAGE.ITEM_IS_INVALID })
     }
     const itemUpdate = await prisma.menuItem.update({ where: { id }, data })
+    this.invalidateItemCache(id)
+
     return itemUpdate
   }
 
@@ -121,6 +199,8 @@ class MenuServices {
       data: { isAvailable: !item.isAvailable },
       select: { id: true, name: true, isAvailable: true }
     })
+    this.invalidateItemCache(id)
+
     return itemAvailable
   }
 
@@ -139,6 +219,8 @@ class MenuServices {
     }
 
     await prisma.menuItem.delete({ where: { id } })
+    this.invalidateItemCache(id)
+
     return { deleted: true, hidden: false, message: 'Đã xóa món ăn' }
   }
 
@@ -166,6 +248,7 @@ class MenuServices {
       include: { options: { orderBy: { sortOrder: 'asc' } } }
     })
 
+    this.invalidateItemCache(itemId)
     return group
   }
 
@@ -245,11 +328,59 @@ class MenuServices {
       }
     })
 
+    this.invalidateItemCache(dto.itemId)
+
     return { ...sales, itemName: item.name, salePrice: Math.round(salePrice) }
   }
 
   async deleteFlashSale(itemId: string) {
+    this.invalidateItemCache(itemId)
     await prisma.flashSale.delete({ where: { itemId } })
+  }
+
+  async getItemDetail(id: string) {
+    const cached = await redis.get(`menu:item:${id}`)
+    if (cached) return cached
+
+    const item = await prisma.menuItem.findUnique({
+      where: { id },
+      include: {
+        variantGroups: {
+          orderBy: { sortOrder: 'asc' },
+          include: {
+            options: {
+              orderBy: { sortOrder: 'asc' }
+            }
+          }
+        },
+        reviews: {
+          orderBy: { createdAt: 'asc' }
+        },
+        flashSale: {
+          where: { isActive: true, startsAt: { lte: new Date() }, endsAt: { gte: new Date() } }
+        }
+      }
+    })
+
+    if (item?.flashSale) {
+      const salePrice = parseFloat(
+        (Number(item.basePrice) * (1 - Number(item.flashSale.discountPercent) / 100)).toFixed(0)
+      )
+
+      const data = {
+        ...item,
+        salePrice: salePrice,
+        salePercent: item.flashSale.discountPercent ?? null,
+        saleEndsAt: item.flashSale.endsAt ?? null
+      }
+      await redis.set(`menu:item:${id}`, data, ITEM_TTL)
+      return data
+    }
+
+    await redis.set(`menu:item:${id}`, { ...item }, ITEM_TTL)
+    return {
+      ...item
+    }
   }
 }
 
