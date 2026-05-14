@@ -26,7 +26,8 @@ export const USER_MESSAGE = {
   FORGOT_PASSTOKEN_IS_INVALID: 'Forgot password token is invalid',
   RESET_PASSWORD_SUCCESS: 'Reset password success',
   YOU_NEED_TO_LOGIN_ACCOUNT: 'You need to login account',
-  ACCESS_DENIED: 'You do not have permission to access this resource'
+  ACCESS_DENIED: 'You do not have permission to access this resource',
+  TABLE_TOKEN_IS_INVALID: 'Table token is invalid, please scan QR code'
 }
 
 export const TABLE_MESSAGE = {

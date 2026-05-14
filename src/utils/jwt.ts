@@ -1,4 +1,5 @@
 import jwt, { SignOptions } from 'jsonwebtoken'
+import z from 'zod'
 import HTTP_STATUS from '~/constants/httpStatus'
 import { USER_MESSAGE } from '~/constants/message'
 import { ErrorWithStatus } from '~/models/Errors'
@@ -25,22 +26,34 @@ export const signToken = ({
   })
 }
 
-export const verifyToken = ({ token, secretOrPrivateKey }: { token: string; secretOrPrivateKey: string }) => {
-  return new Promise<TokenPayload>((resolve, reject) => {
+export const verifyToken = <T>({
+  token,
+  secretOrPrivateKey,
+  schema
+}: {
+  token: string
+  secretOrPrivateKey: string
+  schema?: z.ZodSchema<T>
+}) => {
+  return new Promise<T>((resolve, reject) => {
     jwt.verify(token, secretOrPrivateKey, (err, decoded) => {
       if (err) return reject(err)
 
       // Validate runtime valid Token
-      const result = TokenPayloadSchema.safeParse(decoded)
-      if (result.error) {
-        return reject(
-          new ErrorWithStatus({
-            httpStatusCode: HTTP_STATUS.UNAUTHORIZED,
-            message: USER_MESSAGE.TOKEN_PAYLOAD_IS_INVALID
-          })
-        )
+      if (schema) {
+        const result = schema.safeParse(decoded)
+        if (result.error) {
+          return reject(
+            new ErrorWithStatus({
+              httpStatusCode: HTTP_STATUS.UNAUTHORIZED,
+              message: USER_MESSAGE.TOKEN_PAYLOAD_IS_INVALID
+            })
+          )
+        }
+        resolve(result.data as T)
+      } else {
+        resolve(decoded as unknown as T)
       }
-      resolve(decoded as TokenPayload)
     })
   })
 }

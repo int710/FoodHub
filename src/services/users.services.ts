@@ -5,7 +5,7 @@ import { TokenType } from '~/constants/enums'
 import HTTP_STATUS from '~/constants/httpStatus'
 import { USER_MESSAGE } from '~/constants/message'
 import { ErrorWithStatus } from '~/models/Errors'
-import { SignTokenPayload } from '~/models/schemas/token.schema'
+import { SignTokenPayload, TokenPayloadSchema } from '~/models/schemas/token.schema'
 import { RegisterRequestBody } from '~/models/schemas/users.schema'
 import { comparePassword, hashPassword } from '~/utils/crypto'
 import { signToken, verifyToken } from '~/utils/jwt'
@@ -143,7 +143,11 @@ class UserServices {
     try {
       // Verify token kiểm tra tính hợp lệ
       const [decoded_token, storedToken] = await Promise.all([
-        verifyToken({ token: refresh_token, secretOrPrivateKey: process.env.SECRET_REFRESH_TOKEN as string }),
+        verifyToken({
+          token: refresh_token,
+          secretOrPrivateKey: process.env.SECRET_REFRESH_TOKEN as string,
+          schema: TokenPayloadSchema
+        }),
         prisma.refreshToken.findFirst({ where: { token: refresh_token } })
       ])
 
@@ -245,7 +249,8 @@ class UserServices {
 
       const decoded_verify_email_token = await verifyToken({
         token: verify_email_token,
-        secretOrPrivateKey: process.env.SECRET_VERIFY_EMAIL as string
+        secretOrPrivateKey: process.env.SECRET_VERIFY_EMAIL as string,
+        schema: TokenPayloadSchema
       })
 
       const user = await prisma.user.findUnique({ where: { id: decoded_verify_email_token.user_id } })
@@ -296,7 +301,8 @@ class UserServices {
     try {
       const decoded_token = await verifyToken({
         token,
-        secretOrPrivateKey: process.env.SECRET_FORGOT_PASSWORD as string
+        secretOrPrivateKey: process.env.SECRET_FORGOT_PASSWORD as string,
+        schema: TokenPayloadSchema
       })
       const user = await prisma.user.findUnique({ where: { id: decoded_token.user_id } })
       if (!user) {

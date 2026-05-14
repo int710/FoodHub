@@ -17,3 +17,11 @@ export const TokenPayloadSchema = z.object({
 
 export type TokenPayload = z.infer<typeof TokenPayloadSchema> & JwtPayload
 export type SignTokenPayload = Omit<z.infer<typeof TokenPayloadSchema>, 'iat' | 'exp' | 'token_type'>
+
+// JWT Table Session Token scan QR Code
+export const TableTokenPayloadSchema = z.object({
+  tableId: z.string().min(1, 'Table ID không được để trống'),
+  name: z.string().min(1, 'Tên không được để trống'),
+  sessionId: z.uuid('Session ID phải đúng định dạng UUID')
+})
+export type TableTokenSessionPayload = z.infer<typeof TableTokenPayloadSchema> & JwtPayload
