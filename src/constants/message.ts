@@ -61,3 +61,10 @@ export const MENU_MESSAGE = {
   DELETE_FLASHSALE_SUCCESS: 'Delete flash sales success',
   GET_ALL_SUCCESS: 'Get all menu success'
 }
+
+export const ORDER_MESSAGE = {
+  INVALID_ORDER_TYPE: 'Invalid order type, please check again',
+  TABLE_SESSION_INVALID: 'Invalid table, please scan QRCode on table',
+  NO_LOGIN: 'Please log in to continue',
+  CUSTOMER_ONLY_ORDER: 'Only customer can order delivery'
+}
