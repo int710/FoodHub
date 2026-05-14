@@ -1,6 +1,7 @@
 enum OrderType  {
   DINE_IN
   TAKEAWAY
+  DELIVERY
 }
 
 enum OrderStatus {
@@ -35,6 +36,7 @@ enum PaymentStatus {
 
 model Order {
   id String @id @default(cuid())
+  pickupCode String?
   tableId String?
   table Table? @relation(fields: [tableId], references: [id], onDelete: SetNull)
 
@@ -58,6 +60,8 @@ model Order {
   readyAt DateTime?
   servedAt DateTime?
   paidAt DateTime?
+  deliveryInfo Json?
+
 
   items OrderItem[]
   payments Payment[]
