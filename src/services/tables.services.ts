@@ -4,6 +4,7 @@ import { redis } from '~/config/redis'
 import { TABLE_SESSION_TTL } from '~/constants/const'
 import HTTP_STATUS from '~/constants/httpStatus'
 import { TABLE_MESSAGE } from '~/constants/message'
+import { RedisKey } from '~/constants/redis'
 import { ErrorWithStatus } from '~/models/Errors'
 import { TableReqBody } from '~/models/schemas/table.schema'
 import { signToken } from '~/utils/jwt'
@@ -139,7 +140,7 @@ class TableServices {
         secretOrPrivateKey: process.env.SECRET_TABLE_TOKEN as string,
         options: { expiresIn: '8h' }
       }),
-      redis.set(`table:session:${sessionId}`, table.id, TABLE_SESSION_TTL)
+      redis.set(RedisKey.tableSession(sessionId), table.id, TABLE_SESSION_TTL)
     ])
 
     return {
