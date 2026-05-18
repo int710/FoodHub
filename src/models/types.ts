@@ -1,5 +1,6 @@
 import { OrderType } from '~/generated/prisma/enums'
 import { TableTokenSessionPayload, TokenPayload } from './schemas/token.schema'
+import { CartItem } from './schemas/order.schema'
 
 export interface TableTokenPayload {
   tableId: string
@@ -19,4 +20,9 @@ export interface OrderContextRequest {
   table?: TableTokenSessionPayload
   type: OrderType
   staffId?: string
+}
+
+export interface CartData {
+  items: CartItem[]
+  metadata: { tableId: string; createdAt: number; updatedAt: number; totalQuantity: number }
 }
