@@ -69,6 +69,10 @@ class RedisClient {
     return (await this.client.set(key, serialized, 'EX', ttl, 'NX')) === 'OK'
   }
 
+  async sadd(key: string, ...members: (string | number)[]): Promise<number> {
+    return this.client.sadd(key, ...members)
+  }
+
   async del(...keys: string[]): Promise<number> {
     return this.client.del(...keys)
   }
@@ -76,6 +80,28 @@ class RedisClient {
   async exists(key: string): Promise<boolean> {
     const count = await this.client.exists(key)
     return count > 0
+  }
+
+  async hset(key: string, field: string, value: any): Promise<number> {
+    const serialized = typeof value === 'string' ? value : JSON.stringify(value)
+    return this.client.hset(key, field, serialized)
+  }
+  async hget<T = any>(key: string, field: string): Promise<T | null> {
+    const data = await this.client.hget(key, field)
+    if (!data) return null
+    try {
+      return JSON.parse(data) as T
+    } catch {
+      return data as T
+    }
+  }
+
+  async hgetall(key: string): Promise<Record<string, string>> {
+    return this.client.hgetall(key)
+  }
+
+  async hdel(key: string, ...fields: string[]): Promise<number> {
+    return this.client.hdel(key, ...fields)
   }
 
   async ttl(key: string): Promise<number> {

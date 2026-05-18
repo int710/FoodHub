@@ -4,7 +4,7 @@ import { redis } from '~/config/redis'
 import { TABLE_SESSION_TTL } from '~/constants/const'
 import HTTP_STATUS from '~/constants/httpStatus'
 import { TABLE_MESSAGE } from '~/constants/message'
-import { RedisKey } from '~/constants/redis'
+import { RedisKey, TTL_8H } from '~/constants/redis'
 import { ErrorWithStatus } from '~/models/Errors'
 import { TableReqBody } from '~/models/schemas/table.schema'
 import { signToken } from '~/utils/jwt'
@@ -113,6 +113,7 @@ class TableServices {
 
     // Check xem bàn đã có người ngồi chưa
     const isOccupied = table.orders.length > 0
+    const activeOrder = table.orders[0]
     if (isOccupied) {
       const availableTables = await prisma.table.findMany({
         where: {
@@ -134,14 +135,25 @@ class TableServices {
     }
 
     const sessionId = randomUUID()
+
+    // Tìm kiếm xem bàn này đã có chủ hay chưa
+    const currentHost = await redis.get(RedisKey.tableHost(table.id))
+    const needNewHost = !currentHost || !(await redis.exists(RedisKey.tableSession(currentHost)))
+    if (needNewHost) await redis.set(RedisKey.tableHost(table.id), sessionId, TTL_8H)
+
     const [tableToken] = await Promise.all([
       signToken({
-        payload: { tableId: table.id, name: table.name, sessionId: sessionId },
+        payload: { tableId: table.id, name: table.name, sessionId, isHost: needNewHost },
         secretOrPrivateKey: process.env.SECRET_TABLE_TOKEN as string,
         options: { expiresIn: '8h' }
       }),
-      redis.set(RedisKey.tableSession(sessionId), table.id, TABLE_SESSION_TTL)
+      redis.set(RedisKey.tableSession(sessionId), table.id, TABLE_SESSION_TTL),
+      redis.sadd(RedisKey.tableSessions(table.id), sessionId)
     ])
+
+    if (!activeOrder) {
+      await redis.del(RedisKey.cartTable(table.id))
+    }
 
     return {
       occupied: false,
@@ -154,8 +166,14 @@ class TableServices {
       tableToken,
       sessionId,
       expiresIn: TABLE_SESSION_TTL,
+      activeOrderId: table.orders[0]?.id || null,
       message: `Chào mừng bạn đến ${table.name}`
     }
+  }
+
+  async transferHost(tableId: string, newSessionId: string) {
+    await redis.set(RedisKey.tableHost(tableId), newSessionId, TTL_8H)
+    return { ok: true }
   }
 }
 
