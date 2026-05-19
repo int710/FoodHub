@@ -94,3 +94,14 @@ export const optionalAuth = async (req: Request, res: Response, next: NextFuncti
     next(error)
   }
 }
+
+export const validateTable = async (req: Request, res: Response, next: NextFunction) => {
+  const isCustomer = req.decoded_tokenTableSession
+  if (!isCustomer || isCustomer === null) {
+    throw new ErrorWithStatus({
+      httpStatusCode: HTTP_STATUS.UNAUTHORIZED,
+      message: USER_MESSAGE.TABLE_TOKEN_IS_INVALID
+    })
+  }
+  next()
+}

@@ -151,7 +151,7 @@ class TableServices {
       redis.sadd(RedisKey.tableSessions(table.id), sessionId)
     ])
 
-    if (!activeOrder) {
+    if (!activeOrder && needNewHost) {
       await redis.del(RedisKey.cartTable(table.id))
     }
 

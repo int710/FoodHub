@@ -1,6 +1,9 @@
 import { redis } from '~/config/redis'
+import HTTP_STATUS from '~/constants/httpStatus'
 import { RedisKey } from '~/constants/redis'
-import { CartItem } from '~/models/schemas/order.schema'
+import { ErrorWithStatus } from '~/models/Errors'
+import { CartItem, UpdateDetailItemType } from '~/models/schemas/order.schema'
+import { metadataType } from '~/models/types'
 
 const ITEM_PREFIX = 'item:'
 
@@ -56,6 +59,69 @@ class CartServices {
     await redis.hset(key, 'metadata', metadata)
 
     return { items: currentCart.items, metadata }
+  }
+
+  async updateItem(tableId: string, itemId: string, dto: UpdateDetailItemType) {
+    const key = await RedisKey.cartTable(tableId)
+    const field = `${ITEM_PREFIX}${itemId}`
+    const item = await redis.hget<CartItem>(key, field)
+    if (!item) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.NOT_FOUND,
+        message: 'Item không tồn tại trong giỏ'
+      })
+    }
+
+    const oldQty = item.quantity
+
+    // Nếu chỉ update số lượng
+    const isOnlyQuantity = Object.entries(dto).length === 1 && dto.quantity !== undefined
+    if (isOnlyQuantity) {
+      item.quantity = dto.quantity!
+      await redis.hset(key, field, item)
+
+      const metaRaw = (await redis.hget<metadataType>(key, 'metadata')) as metadataType
+      const qlt = metaRaw.totalQuantity - oldQty + dto.quantity!
+      const newMeta: metadataType = { ...metaRaw, updatedAt: Date.now(), totalQuantity: qlt }
+      await redis.hset(key, 'metadata', newMeta)
+      return { action: 'updated', item }
+    }
+
+    // Update chi tiết
+    const currentCart = await this.getCart(tableId)
+    item.quantity = dto.quantity ?? item.quantity
+    if (dto.note !== undefined) item.note = dto.note
+    if (dto.variantOptionIds !== undefined) item.variantOptionIds = dto.variantOptionIds
+
+    const sig = (item.variantOptionIds || []).sort().join(',')
+
+    // Kiểm tra xem sau khi đổi detail, có bị trùng với một món KHÁC đang có trong giỏ không
+    const existingMatch = currentCart.items.find(
+      (i: CartItem) =>
+        i.id !== itemId &&
+        i.menuItemId === item.menuItemId &&
+        (i.variantOptionIds || []).sort().join(',') === sig &&
+        i.note === item.note
+    )
+
+    let finalItem = item
+
+    if (existingMatch) {
+      // Nếu trùng: cộng dồn số lượng vào thằng vừa tìm thấy và xóa bản ghi của thằng cũ đi
+      existingMatch.quantity += item.quantity
+      await redis.hset(key, `${ITEM_PREFIX}${existingMatch.id}`, existingMatch)
+      await redis.hdel(key, field)
+      finalItem = existingMatch
+    } else {
+      await redis.hset(key, field, item)
+    }
+
+    const metaRaw = (await redis.hget<metadataType>(key, 'metadata')) as metadataType
+    const qlt = metaRaw.totalQuantity - oldQty + item.quantity
+    const newMeta: metadataType = { ...metaRaw, updatedAt: Date.now(), totalQuantity: qlt }
+    await redis.hset(key, 'metadata', newMeta)
+
+    return { action: existingMatch ? 'merged' : 'updated', item: finalItem }
   }
 }
 const cartsServices = new CartServices()

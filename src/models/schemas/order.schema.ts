@@ -27,4 +27,16 @@ export const cartItemsSchema = z.object({
 })
 
 export type CartItem = z.infer<typeof cartItemsSchema>['body']
-// export type
+
+export const UpdateQtySchema = z.object({ body: z.object({ quantity: z.coerce.number().int().positive().max(99) }) })
+export const UpdateDetailSchema = z
+  .object({
+    body: z.object({
+      quantity: z.coerce.number().int().positive().max(99).optional(),
+      note: z.string().max(255).optional(),
+      variantOptionIds: z.array(z.string().min(1)).optional()
+    })
+  })
+  .refine((d) => Object.keys(d).length > 0, { message: 'Phải có ít nhất 1 field' })
+
+export type UpdateDetailItemType = z.infer<typeof UpdateDetailSchema>['body']
