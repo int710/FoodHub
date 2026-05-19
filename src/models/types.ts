@@ -26,3 +26,10 @@ export interface CartData {
   items: CartItem[]
   metadata: { tableId: string; createdAt: number; updatedAt: number; totalQuantity: number }
 }
+
+export type metadataType = {
+  tableId: string
+  createdAt: number
+  updatedAt: number
+  totalQuantity: number
+}
