@@ -2,7 +2,7 @@ import mongoose from 'mongoose'
 import { config } from 'dotenv'
 config()
 
-const uri = `mongodb+srv://${process.env.MONGO_DB_USER}:${process.env.MONGO_DB_PASS}@int710.22yimso.mongodb.net/?appName=int710`
+const uri = `mongodb+srv://${process.env.MONGO_DB_USER}:${process.env.MONGO_DB_PASS}@int710.glxt4vn.mongodb.net/?appName=int710`
 
 export const connectMongodb = async () => {
   try {

@@ -1,5 +1,191 @@
 import { Request, Response } from 'express'
+import { prisma } from '~/config/prisma'
+import HTTP_STATUS from '~/constants/httpStatus'
+import { Prisma } from '~/generated/prisma/client'
+import { ItemStatus, OrderStatus, OrderType, PaymentMethod, PaymentStatus } from '~/generated/prisma/enums'
+import { ApiResponse } from '~/models/ApiResponse'
+import { ErrorWithStatus } from '~/models/Errors'
+import cartsServices, { CartType } from '~/services/carts.services'
+
+function mapOrderTypeToCartType(type: OrderType): CartType {
+  if (type === OrderType.DINE_IN) return CartType.DINE_IN
+  if (type === OrderType.TAKEAWAY) return CartType.TAKEAWAY
+  return CartType.DELIVERY
+}
+
+function getTakeawayOwnerId(req: Request): string {
+  const headerSessionId = req.headers['x-session-id'] as string | undefined
+  const userId = req.decoded_authorization?.user_id
+  return headerSessionId || userId || `guest_${req.ip || 'unknown'}`
+}
+
+function resolveSessionId(req: Request, type: OrderType, fallbackOwnerId: string): string {
+  const tableSessionId = req.decoded_tokenTableSession?.sessionId
+  const headerSessionId = req.headers['x-session-id'] as string | undefined
+  const userId = req.decoded_authorization?.user_id
+
+  if (type === OrderType.DINE_IN) return tableSessionId || crypto.randomUUID()
+  if (type === OrderType.TAKEAWAY) return headerSessionId || userId || fallbackOwnerId
+  return userId || crypto.randomUUID()
+}
 
 export const ordersController = {
-  async newOrder(req: Request, res: Response) {}
+  async newOrder(req: Request, res: Response) {
+    const orderContext = req.order_context
+    if (!orderContext) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.NOT_FOUND,
+        message: 'Không có context đặt hàng'
+      })
+    }
+
+    const body = (req.body ?? {}) as {
+      note?: string
+      deliveryInfo?: Record<string, unknown>
+      paymentMethod?: string
+    }
+
+    const user = req.decoded_authorization
+
+    let ownerId = ''
+    let tableId: string | undefined
+
+    if (orderContext.type === OrderType.DINE_IN) {
+      tableId = orderContext.table?.tableId
+      if (!tableId) {
+        throw new ErrorWithStatus({
+          httpStatusCode: HTTP_STATUS.UNAUTHORIZED,
+          message: 'Bạn chưa có bàn, vui lòng quét mã QR để tiếp tục'
+        })
+      }
+      ownerId = tableId
+    } else if (orderContext.type === OrderType.TAKEAWAY) {
+      ownerId = getTakeawayOwnerId(req)
+    } else {
+      if (!user?.user_id) {
+        throw new ErrorWithStatus({
+          httpStatusCode: HTTP_STATUS.UNAUTHORIZED,
+          message: 'Phải đăng nhập để đặt giao hàng'
+        })
+      }
+      ownerId = user.user_id
+    }
+
+    const cartType = mapOrderTypeToCartType(orderContext.type)
+
+    const cart = await cartsServices.getCart(cartType, ownerId)
+    if (!cart.items.length) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.BAD_REQUEST,
+        message: 'Giỏ hàng đang trống'
+      })
+    }
+
+    if (tableId) {
+      const existTable = await prisma.table.findUnique({
+        where: { id: tableId },
+        select: { id: true }
+      })
+      if (!existTable) {
+        throw new ErrorWithStatus({
+          httpStatusCode: HTTP_STATUS.UNAUTHORIZED,
+          message: 'Bàn không tồn tại, vui lòng kiểm tra lại QR'
+        })
+      }
+    }
+
+    const menuItems = await prisma.menuItem.findMany({
+      where: { id: { in: cart.items.map((i) => i.menuItemId) } },
+      select: { id: true, name: true, basePrice: true, isAvailable: true }
+    })
+    const menuMap = new Map(menuItems.map((i) => [i.id, i]))
+
+    const invalidItems = cart.items.filter((i) => !menuMap.has(i.menuItemId))
+    if (invalidItems.length) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.NOT_FOUND,
+        message: 'Một số món trong giỏ không còn tồn tại'
+      })
+    }
+
+    const unavailableItems = cart.items.filter((i) => !menuMap.get(i.menuItemId)?.isAvailable)
+    if (unavailableItems.length) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.BAD_REQUEST,
+        message: 'Một số món hiện không còn phục vụ'
+      })
+    }
+
+    let subtotal = 0
+    const orderItemsData = cart.items.map((item) => {
+      const menuItem = menuMap.get(item.menuItemId)!
+      const unitPrice = Number(menuItem.basePrice.toString())
+      const subTotal = Number((unitPrice * item.quantity).toFixed(2))
+      subtotal += subTotal
+
+      return {
+        menuItemId: item.menuItemId,
+        quantity: item.quantity,
+        unitPrice: new Prisma.Decimal(unitPrice.toFixed(2)),
+        subTotal: new Prisma.Decimal(subTotal.toFixed(2)),
+        snapshot: {
+          menuItemId: item.menuItemId,
+          name: menuItem.name,
+          quantity: item.quantity,
+          note: item.note || '',
+          variantOptionIds: item.variantOptionIds || []
+        },
+        status: ItemStatus.WAITING,
+        note: item.note || null
+      }
+    })
+
+    const vatAmount = Number((subtotal * 0.1).toFixed(2))
+    const totalAmount = Number((subtotal + vatAmount).toFixed(2))
+
+    const paymentMethod =
+      body.paymentMethod && Object.values(PaymentMethod).includes(body.paymentMethod as PaymentMethod)
+        ? (body.paymentMethod as PaymentMethod)
+        : PaymentMethod.CASH
+
+    const sessionId = resolveSessionId(req, orderContext.type, ownerId)
+
+    const createdOrder = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.create({
+        data: {
+          type: orderContext.type,
+          status: OrderStatus.PENDING,
+          sessionId,
+          note: body.note || null,
+          tableId: tableId || undefined,
+          customerId: orderContext.user?.user_id || undefined,
+          confirmedById: orderContext.staffId || undefined,
+          subtotal: new Prisma.Decimal(subtotal.toFixed(2)),
+          vatAmount: new Prisma.Decimal(vatAmount.toFixed(2)),
+          totalAmount: new Prisma.Decimal(totalAmount.toFixed(2)),
+          deliveryInfo: body.deliveryInfo ? (body.deliveryInfo as Prisma.InputJsonValue) : undefined
+        }
+      })
+
+      await tx.orderItem.createMany({
+        data: orderItemsData.map((it) => ({ ...it, orderId: order.id }))
+      })
+
+      await tx.payment.create({
+        data: {
+          orderId: order.id,
+          method: paymentMethod,
+          status: PaymentStatus.PENDING,
+          amount: new Prisma.Decimal(totalAmount.toFixed(2)),
+          gatewayData: {}
+        }
+      })
+
+      return order
+    })
+
+    await cartsServices.clearCart(cartType, ownerId)
+
+    return res.json(ApiResponse('Tạo đơn hàng thành công', { order: createdOrder, items: orderItemsData }))
+  }
 }

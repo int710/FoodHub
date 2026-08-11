@@ -33,3 +33,12 @@ export type metadataType = {
   updatedAt: number
   totalQuantity: number
 }
+
+
+export type CartContext = {
+  type: OrderType
+  ownerId: string
+  tableId?: string
+  userId?: string
+  sessionId?: string
+}

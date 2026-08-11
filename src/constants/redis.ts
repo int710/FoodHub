@@ -4,5 +4,6 @@ export const RedisKey = {
   tableSession: (sessionId: string) => `table:session:${sessionId}`,
   tableSessions: (tid: string) => `table:sessions:${tid}`,
   tableHost: (tid: string) => `table:host:${tid}`,
-  cartTable: (tid: string) => `table:cart:${tid}`
+  cartTable: (tid: string) => `table:cart:${tid}`,
+  cart: (type: string, ownerId: string) => `cart:${type}:${ownerId}`
 }

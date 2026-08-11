@@ -5,7 +5,7 @@ class RedisClient {
   private client!: RedisType
   private isReady = false
 
-  private constructor() {}
+  private constructor() { }
 
   public static getInstance(): RedisClient {
     if (!RedisClient.instance) {
@@ -106,6 +106,14 @@ class RedisClient {
 
   async ttl(key: string): Promise<number> {
     return this.client.ttl(key)
+  }
+
+  async expire(key: string, ttlSeconds: number): Promise<number> {
+    return this.client.expire(key, ttlSeconds)
+  }
+
+  async pexpire(key: string, ttlMs: number): Promise<number> {
+    return this.client.pexpire(key, ttlMs)
   }
 
   get isConnected(): boolean {

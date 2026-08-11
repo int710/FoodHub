@@ -6,6 +6,6 @@ import { requestHandler } from '~/utils/requestHandler'
 
 const ordersRouter = Router()
 
-ordersRouter.post('/new', optionalAuth, checkOrderContext, requestHandler(ordersController.newOrder))
+ordersRouter.post('/:type/new', optionalAuth, checkOrderContext, requestHandler(ordersController.newOrder))
 
 export default ordersRouter
