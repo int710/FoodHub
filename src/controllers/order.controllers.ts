@@ -2,10 +2,21 @@ import { Request, Response } from 'express'
 import { prisma } from '~/config/prisma'
 import HTTP_STATUS from '~/constants/httpStatus'
 import { Prisma } from '~/generated/prisma/client'
-import { ItemStatus, OrderStatus, OrderType, PaymentMethod, PaymentStatus } from '~/generated/prisma/enums'
+import { ItemStatus, OrderStatus, OrderType, PaymentMethod, PaymentStatus, Role } from '~/generated/prisma/enums'
 import { ApiResponse } from '~/models/ApiResponse'
 import { ErrorWithStatus } from '~/models/Errors'
+import { HistoryQuery, kitchenOrdersQuerySchema, KitchenQuery } from '~/models/schemas/order.schema'
 import cartsServices, { CartType } from '~/services/carts.services'
+import ordersServices from '~/services/orders.services'
+import { orderHistoryQuerySchema } from '~/models/schemas/order.schema'
+import { ParamsDictionary } from 'express-serve-static-core'
+import {
+  cancelOrderSchema,
+  confirmOrderSchema,
+  rejectOrderSchema,
+  serveOrderSchema,
+  updateKitchenItemStatusSchema
+} from '~/models/schemas/order.schema'
 
 function mapOrderTypeToCartType(type: OrderType): CartType {
   if (type === OrderType.DINE_IN) return CartType.DINE_IN
@@ -187,5 +198,86 @@ export const ordersController = {
     await cartsServices.clearCart(cartType, ownerId)
 
     return res.json(ApiResponse('Tạo đơn hàng thành công', { order: createdOrder, items: orderItemsData }))
+  },
+
+  async history(req: Request, res: Response) {
+    const user = req.decoded_authorization!
+    const { query } = orderHistoryQuerySchema.parse({
+      query: req.query
+    })
+    const result = await ordersServices.getHistory(user.user_id, user.role as Role, query)
+
+    return res.json(ApiResponse('Lịch sử đơn hàng', result.orders, result.pagination))
+  },
+
+  async getKitchenOrders(req: Request, res: Response) {
+    const { query } = kitchenOrdersQuerySchema.parse({
+      query: req.query
+    })
+
+    const result = await ordersServices.getKitchenOrders(query)
+
+    return res.json(ApiResponse('Danh sách món bếp', result.items, result.pagination))
+  },
+  async confirm(req: Request, res: Response) {
+    const user = req.decoded_authorization!
+    const { params } = confirmOrderSchema.parse({
+      params: req.params,
+      body: req.body
+    })
+
+    const order = await ordersServices.confirmOrder(params.id, user.user_id)
+
+    return res.json(ApiResponse('Xác nhận đơn hàng thành công', order))
+  },
+
+  async reject(req: Request, res: Response) {
+    const { params, body } = rejectOrderSchema.parse({
+      params: req.params,
+      body: req.body
+    })
+
+    const order = await ordersServices.rejectOrder(params.id, body.reason)
+
+    return res.json(ApiResponse('Đã từ chối đơn hàng', order))
+  },
+
+  async updateKitchenStatus(req: Request, res: Response) {
+    const { params, body } = updateKitchenItemStatusSchema.parse({
+      params: req.params,
+      body: req.body
+    })
+
+    const item = await ordersServices.updateKitchenItemStatus(params.itemId, body.status)
+
+    return res.json(ApiResponse('Cập nhật trạng thái món thành công', item))
+  },
+
+  async serve(req: Request, res: Response) {
+    const { params } = serveOrderSchema.parse({
+      params: req.params,
+      body: req.body
+    })
+
+    const order = await ordersServices.serveOrder(params.id)
+
+    return res.json(ApiResponse('Đã phục vụ đơn hàng', order))
+  },
+
+  async cancel(req: Request, res: Response) {
+    const user = req.decoded_authorization!
+    const { params, body } = cancelOrderSchema.parse({
+      params: req.params,
+      body: req.body
+    })
+
+    const order = await ordersServices.cancelOrder(
+      params.id,
+      user.user_id,
+      user.role as Role,
+      body.reason
+    )
+
+    return res.json(ApiResponse('Hủy đơn hàng thành công', order))
   }
 }
