@@ -206,7 +206,7 @@ class MenuServices {
 
   async deleteItem(id: string) {
     const activeOrderCount = await prisma.orderItem.count({
-      where: { menuItemId: id, order: { status: { in: ['CONFIRMED', 'PENDING', 'PREPARING', 'READY', 'SERVED'] } } }
+      where: { menuItemId: id, order: { status: { in: ['CONFIRMED', 'PENDING_PAYMENT', 'PENDING_CONFIRMATION', 'PREPARING', 'READY', 'SERVED'] } } }
     })
 
     if (activeOrderCount > 0) {

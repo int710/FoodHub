@@ -6,6 +6,9 @@ import { ItemStatus, OrderStatus, OrderType, PaymentMethod, PaymentStatus, Role 
 import { ApiResponse } from '~/models/ApiResponse'
 import { ErrorWithStatus } from '~/models/Errors'
 import { HistoryQuery, kitchenOrdersQuerySchema, KitchenQuery } from '~/models/schemas/order.schema'
+import { VNPay } from 'vnpay'
+import { ProductCode, VnpLocale } from 'vnpay/enums'
+import { dateFormat } from 'vnpay/utils'
 import cartsServices, { CartType } from '~/services/carts.services'
 import ordersServices from '~/services/orders.services'
 import { orderHistoryQuerySchema } from '~/models/schemas/order.schema'
@@ -17,6 +20,7 @@ import {
   serveOrderSchema,
   updateKitchenItemStatusSchema
 } from '~/models/schemas/order.schema'
+import { vnpay } from '~/config/vnpay'
 
 function mapOrderTypeToCartType(type: OrderType): CartType {
   if (type === OrderType.DINE_IN) return CartType.DINE_IN
@@ -159,13 +163,19 @@ export const ordersController = {
         ? (body.paymentMethod as PaymentMethod)
         : PaymentMethod.CASH
 
+    const isVnpay = paymentMethod === PaymentMethod.VNPAY // Thanh toan thẻ ví
+    const orderStatus = isVnpay ? OrderStatus.PENDING_PAYMENT : OrderStatus.PENDING_CONFIRMATION
+    const paymentStatus = isVnpay ? PaymentStatus.PENDING : PaymentStatus.UNPAID
+
+    const orderCode = `FHUB_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`
     const sessionId = resolveSessionId(req, orderContext.type, ownerId)
 
     const createdOrder = await prisma.$transaction(async (tx) => {
       const order = await tx.order.create({
         data: {
+          orderCode, // dùng làm vnp_TxnRef
           type: orderContext.type,
-          status: OrderStatus.PENDING,
+          status: OrderStatus.PENDING_PAYMENT,
           sessionId,
           note: body.note || null,
           tableId: tableId || undefined,
@@ -174,7 +184,9 @@ export const ordersController = {
           subtotal: new Prisma.Decimal(subtotal.toFixed(2)),
           vatAmount: new Prisma.Decimal(vatAmount.toFixed(2)),
           totalAmount: new Prisma.Decimal(totalAmount.toFixed(2)),
-          deliveryInfo: body.deliveryInfo ? (body.deliveryInfo as Prisma.InputJsonValue) : undefined
+          deliveryInfo: body.deliveryInfo ? (body.deliveryInfo as Prisma.InputJsonValue) : undefined,
+          // Thêm expire cho VNPay
+          ...(isVnpay ? { expireAt: new Date(Date.now() + 15 * 60 * 1000) } : {})
         }
       })
 
@@ -186,7 +198,7 @@ export const ordersController = {
         data: {
           orderId: order.id,
           method: paymentMethod,
-          status: PaymentStatus.PENDING,
+          status: paymentStatus,
           amount: new Prisma.Decimal(totalAmount.toFixed(2)),
           gatewayData: {}
         }
@@ -195,9 +207,37 @@ export const ordersController = {
       return order
     })
 
-    await cartsServices.clearCart(cartType, ownerId)
+    if (!isVnpay) {
+      await cartsServices.clearCart(cartType, ownerId)
+    } if (isVnpay) {
+      const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.socket.remoteAddress || '127.0.0.1'
+      const paymentUrl = vnpay.buildPaymentUrl({
+        vnp_Amount: totalAmount, // lib tự x100
+        vnp_IpAddr: ip.replace(/^::ffff:/, ''),
+        vnp_TxnRef: orderCode, // QUAN TRỌNG: dùng orderCode, không dùng order.id
+        vnp_OrderInfo: `Thanh toan FoodHub ${orderCode}`,
+        vnp_OrderType: ProductCode.Other,
+        vnp_ReturnUrl: process.env.VNPAY_RETURN_URL!,
+        vnp_Locale: VnpLocale.VN,
+        vnp_CreateDate: dateFormat(new Date()),
+        vnp_ExpireDate: dateFormat(new Date(Date.now() + 15 * 60 * 1000)),
+      })
 
-    return res.json(ApiResponse('Tạo đơn hàng thành công', { order: createdOrder, items: orderItemsData }))
+      return res.json(ApiResponse('Tạo đơn hàng VNPay, vui lòng thanh toán', {
+        order: createdOrder,
+        paymentUrl,
+        orderCode
+      }))
+    }
+
+    // CASH
+    await cartsServices.clearCart(cartType, ownerId)
+    // TODO: bắn socket cho quán: io.to(`restaurant`).emit('new-order', createdOrder)
+
+    return res.json(ApiResponse('Tạo đơn hàng tiền mặt thành công', {
+      order: createdOrder,
+      items: orderItemsData
+    }))
   },
 
   async history(req: Request, res: Response) {
