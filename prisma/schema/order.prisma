@@ -5,13 +5,23 @@ enum OrderType  {
 }
 
 enum OrderStatus {
-  PENDING
+  PENDING_PAYMENT        // VNPay: vừa tạo, đang chờ trả tiền
+  PENDING_CONFIRMATION   // CASH: hoặc VNPay đã trả xong, đang chờ quán xác nhận
   CONFIRMED
   PREPARING
   READY
   SERVED
-  PAID
+  COMPLETED              // đổi từ PAID -> COMPLETED cho rõ
   CANCELLED
+  PAYMENT_FAILED         // thêm để khi VNPay fail
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  UNPAID
+  FAILED   // thêm FAILED
+  REFUNDED
 }
 
 enum ItemStatus {
@@ -27,15 +37,9 @@ enum PaymentMethod {
   CASH
 }
 
-enum PaymentStatus {
-  PENDING
-  SUCCESS
-  FAILED
-  REFUNDED
-}
-
 model Order {
   id String @id @default(cuid())
+  orderCode String
   pickupCode String?
   tableId String?
   table Table? @relation(fields: [tableId], references: [id], onDelete: SetNull)
@@ -48,7 +52,7 @@ model Order {
 
   sessionId String
   type OrderType @default(DINE_IN)
-  status OrderStatus @default(PENDING)
+  status OrderStatus @default(PENDING_CONFIRMATION)
   note String?
   cancelReason String?
 
@@ -61,6 +65,7 @@ model Order {
   servedAt DateTime?
   paidAt DateTime?
   deliveryInfo Json?
+  expireAt DateTime?
 
 
   items OrderItem[]

@@ -5,6 +5,7 @@ import menusRouter from './menu.routes'
 import mediasRouter from './media.routes'
 import ordersRouter from './orders.routes'
 import cartsRouter from './cart.routes'
+import paymentsRouter from './payment.routes'
 
 const routerApp = Router()
 
@@ -14,5 +15,6 @@ routerApp.use('/menu', menusRouter)
 routerApp.use('/media', mediasRouter)
 routerApp.use('/order', ordersRouter)
 routerApp.use('/cart', cartsRouter)
+routerApp.use('/payment', paymentsRouter)
 
 export default routerApp
