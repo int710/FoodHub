@@ -26,7 +26,8 @@ export const initSocket = (httpServer: HttpServer) => {
     if (!user) return
 
     const userId = String(user.user_id)
-    const isNowOnline = presenceManager.addSocket(userId, socket.id)
+    const isTrackedUser = user.authType === 'USER'
+    const isNowOnline = isTrackedUser && presenceManager.addSocket(userId, socket.id)
     if (isNowOnline) {
       io.emit('user:online', { userId })
     }
@@ -39,7 +40,7 @@ export const initSocket = (httpServer: HttpServer) => {
     registerOrderSocket(io, socket)
 
     socket.on('disconnect', (reason) => {
-      const isNowOffline = presenceManager.removeSocket(userId, socket.id)
+      const isNowOffline = isTrackedUser && presenceManager.removeSocket(userId, socket.id)
       if (isNowOffline) {
         io.emit('user:offline', { userId })
       }

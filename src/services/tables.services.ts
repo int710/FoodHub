@@ -94,7 +94,20 @@ class TableServices {
       where: { qrToken },
       include: {
         orders: {
-          where: { status: { in: ['PENDING_PAYMENT', 'CONFIRMED', 'PREPARING', 'READY', 'SERVED'] } },
+          where: {
+            status: {
+              in: [
+                'PENDING_PAYMENT',
+                'PENDING_CONFIRMATION',
+                'CONFIRMED',
+                'PREPARING',
+                'READY',
+                'SERVED',
+                'CANCELLED',
+                'PAYMENT_FAILED'
+              ]
+            }
+          },
           select: { id: true, status: true },
           take: 1
         }
@@ -119,7 +132,22 @@ class TableServices {
         where: {
           isActive: true,
           id: { not: table.id },
-          orders: { none: { status: { in: ['PENDING_PAYMENT', 'PREPARING', 'CONFIRMED', 'SERVED', 'READY'] } } }
+          orders: {
+            none: {
+              status: {
+                in: [
+                  'PENDING_PAYMENT',
+                  'PENDING_CONFIRMATION',
+                  'PREPARING',
+                  'CONFIRMED',
+                  'SERVED',
+                  'READY',
+                  'CANCELLED',
+                  'PAYMENT_FAILED'
+                ]
+              }
+            }
+          }
         },
         select: { id: true, name: true, capacity: true, floor: true },
         orderBy: { name: 'asc' }

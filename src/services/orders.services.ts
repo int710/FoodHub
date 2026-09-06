@@ -5,6 +5,7 @@ import HTTP_STATUS from '~/constants/httpStatus'
 import { ErrorWithStatus } from '~/models/Errors'
 import { PaymentStatus } from '~/generated/prisma/enums'
 import { emitOrderStatusUpdate } from "~/socket/orders/order.emitter"
+import notificationsServices from "~/services/notifications.services"
 
 const orderDetailInclude = {
   table: {
@@ -170,6 +171,15 @@ class OrdersServices {
       }
     })
 
+    await notificationsServices.createOrderStatusNotification({
+      orderId: updatedOrder.id,
+      previousStatus: OrderStatus.PENDING_CONFIRMATION,
+      status: updatedOrder.status,
+      actorRole: Role.STAFF
+    }).catch((error) => {
+      console.error('[Notification] Failed to create confirmation notification:', error)
+    })
+
     return updatedOrder
   }
 
@@ -226,6 +236,16 @@ class OrdersServices {
         userId: staffId,
         role: role || 'STAFF'
       } : undefined
+    })
+
+    await notificationsServices.createOrderStatusNotification({
+      orderId: updatedOrder.id,
+      previousStatus,
+      status: updatedOrder.status,
+      actorRole: role === 'ADMIN' ? Role.ADMIN : Role.STAFF,
+      reason
+    }).catch((error) => {
+      console.error('[Notification] Failed to create rejection notification:', error)
     })
 
     return updatedOrder
@@ -383,6 +403,14 @@ class OrdersServices {
       updatedAt: (updatedOrder.servedAt || new Date()).toISOString()
     })
 
+    await notificationsServices.createOrderStatusNotification({
+      orderId: updatedOrder.id,
+      previousStatus: OrderStatus.READY,
+      status: updatedOrder.status
+    }).catch((error) => {
+      console.error('[Notification] Failed to create served notification:', error)
+    })
+
     return updatedOrder
   }
 
@@ -458,6 +486,16 @@ class OrdersServices {
         userId: actorId,
         role: Role.ADMIN
       }
+    })
+
+    await notificationsServices.createOrderStatusNotification({
+      orderId: updatedOrder.id,
+      previousStatus,
+      status: updatedOrder.status,
+      actorRole,
+      reason
+    }).catch((error) => {
+      console.error('[Notification] Failed to create cancellation notification:', error)
     })
 
     return updatedOrder

@@ -23,6 +23,7 @@ import {
 import { vnpay } from '~/config/vnpay'
 import { emitOrderItemStatusUpdate, emitOrderStatusUpdate } from '~/socket/orders/order.emitter'
 import { TokenPayload } from '~/models/schemas/token.schema'
+import notificationsServices from '~/services/notifications.services'
 
 function mapOrderTypeToCartType(type: OrderType): CartType {
   if (type === OrderType.DINE_IN) return CartType.DINE_IN
@@ -109,6 +110,22 @@ export const ordersController = {
           message: 'Bàn không tồn tại, vui lòng kiểm tra lại QR'
         })
       }
+
+      const orderWaitingForConfirmation = await prisma.order.findFirst({
+        where: {
+          tableId,
+          status: {
+            in: [OrderStatus.PENDING_PAYMENT, OrderStatus.PENDING_CONFIRMATION]
+          }
+        },
+        select: { id: true }
+      })
+      if (orderWaitingForConfirmation) {
+        throw new ErrorWithStatus({
+          httpStatusCode: HTTP_STATUS.CONFLICT,
+          message: 'Bàn đang có đơn chờ xác nhận, vui lòng đợi quán xác nhận trước khi đặt thêm'
+        })
+      }
     }
 
     const menuItems = await prisma.menuItem.findMany({
@@ -177,7 +194,7 @@ export const ordersController = {
         data: {
           orderCode, // dùng làm vnp_TxnRef
           type: orderContext.type,
-          status: OrderStatus.PENDING_PAYMENT,
+          status: orderStatus,
           sessionId,
           note: body.note || null,
           tableId: tableId || undefined,
@@ -234,6 +251,9 @@ export const ordersController = {
 
     // CASH
     await cartsServices.clearCart(cartType, ownerId)
+    await notificationsServices.createOrderCreated(createdOrder.id).catch((error) => {
+      console.error('[Notification] Failed to create new order notification:', error)
+    })
     // TODO: bắn socket cho quán: io.to(`restaurant`).emit('new-order', createdOrder)
 
     return res.json(ApiResponse('Tạo đơn hàng tiền mặt thành công', {
@@ -274,12 +294,18 @@ export const ordersController = {
   },
 
   async reject(req: Request, res: Response) {
+    const user = req.decoded_authorization!
     const { params, body } = rejectOrderSchema.parse({
       params: req.params,
       body: req.body
     })
 
-    const order = await ordersServices.rejectOrder(params.id, body.reason)
+    const order = await ordersServices.rejectOrder(
+      params.id,
+      body.reason,
+      user.user_id,
+      user.role as 'STAFF' | 'ADMIN'
+    )
 
     return res.json(ApiResponse('Đã từ chối đơn hàng', order))
   },
@@ -316,6 +342,15 @@ export const ordersController = {
           userId: user_id,
           role: role,
         }
+      })
+
+      await notificationsServices.createOrderStatusNotification({
+        orderId: order.id,
+        previousStatus: previousOrderStatus,
+        status: order.status,
+        actorRole: role as Role
+      }).catch((error) => {
+        console.error('[Notification] Failed to create kitchen status notification:', error)
       })
     }
 

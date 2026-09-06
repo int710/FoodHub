@@ -33,6 +33,9 @@ export const registerMessageSocket = (io: Server, socket: Socket): void => {
       const userRoleLower = user.role?.toLowerCase()
       const isCustomer = userRoleLower === SenderRole.CUSTOMER
       const isHost = userRoleLower === SenderRole.STAFF || userRoleLower === SenderRole.ADMIN
+      const customerOwnerId = user.authType === 'TABLE_GUEST'
+        ? user.tableId
+        : String(user.user_id)
 
       if (!isCustomer && !isHost) {
         return callback?.({ success: false, message: 'Forbidden' })
@@ -47,7 +50,7 @@ export const registerMessageSocket = (io: Server, socket: Socket): void => {
         if (!conversation || conversation.status === ConversationStatus.CLOSED) {
           return callback?.({ success: false, message: 'Conversation invalid or closed' })
         }
-        if (isCustomer && String(conversation.customerId) !== String(user.user_id)) {
+        if (isCustomer && String(conversation.customerId) !== String(customerOwnerId)) {
           return callback?.({ success: false, message: 'Forbidden: Access denied' })
         }
       } else {
@@ -55,7 +58,7 @@ export const registerMessageSocket = (io: Server, socket: Socket): void => {
         if (!isCustomer) {
           return callback?.({ success: false, message: 'Host must provide conversationId' })
         }
-        const result = await ConversationServices.getOrCreateForCustomer(String(user.user_id))
+        const result = await ConversationServices.getOrCreateForCustomer(String(customerOwnerId))
         conversation = result.conversation
         isNewConversation = result.isNew
       }
