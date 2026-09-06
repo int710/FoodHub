@@ -38,9 +38,12 @@ export const registerConversationSocket = (io: Server, socket: Socket): void => 
         const userRoleLower = user.role?.toLowerCase()
         const isCustomer = userRoleLower === SenderRole.CUSTOMER
         const isHost = userRoleLower === SenderRole.STAFF || userRoleLower === SenderRole.ADMIN
+        const customerOwnerId = user.authType === 'TABLE_GUEST'
+          ? user.tableId
+          : String(user.user_id)
 
         // Validate quyền truy cập của Customer
-        if (isCustomer && conversation.customerId !== String(user.user_id)) {
+        if (isCustomer && conversation.customerId !== customerOwnerId) {
           return callback?.({ success: false, message: 'Forbidden: Access denied' })
         }
 

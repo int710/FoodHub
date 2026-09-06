@@ -18,6 +18,17 @@ export async function verifyCustomerOrderAccess(userId: string, orderId: string)
   return !!order
 }
 
+export async function verifyTableOrderAccess(tableId: string, orderId: string): Promise<boolean> {
+  if (!tableId || !orderId) return false
+
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, tableId },
+    select: { id: true }
+  })
+
+  return !!order
+}
+
 export const registerOrderSocket = (_io: Server, socket: Socket): void => {
   const user = socket.data.user
   if (!user) return;
@@ -40,7 +51,12 @@ export const registerOrderSocket = (_io: Server, socket: Socket): void => {
         if (!orderId) {
           return ack?.({ ok: false, message: 'orderId is required' })
         }
-        if (user.role === 'CUSTOMER') {
+        if (user.authType === 'TABLE_GUEST') {
+          const isAllowed = await verifyTableOrderAccess(user.tableId || '', orderId);
+          if (!isAllowed) {
+            return ack?.({ ok: false, message: 'Unauthorized access to this table order' });
+          }
+        } else if (user.role === 'CUSTOMER') {
           const isAllowed = await verifyCustomerOrderAccess(user.user_id, orderId);
           if (!isAllowed) {
             return ack?.({ ok: false, message: 'Unauthorized access to this order' });

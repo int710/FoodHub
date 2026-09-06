@@ -17,6 +17,7 @@ import {
 import type { ReturnQueryFromVNPay } from 'vnpay/types'
 import { ApiResponse } from '~/models/ApiResponse'
 import paymentServices from '~/services/payments.services'
+import notificationsServices from '~/services/notifications.services'
 
 const mapOrderTypeToCartType = (type: OrderType): CartType => {
   if (type === OrderType.DINE_IN) return CartType.DINE_IN
@@ -161,6 +162,17 @@ const paymentController = {
           })
         })
 
+        await notificationsServices.createOrderStatusNotification({
+          orderId: order.id,
+          previousStatus: OrderStatus.PENDING_PAYMENT,
+          status: OrderStatus.PENDING_CONFIRMATION
+        }).catch((error) => {
+          console.error('[Notification] Failed to create payment success notification:', error)
+        })
+        await notificationsServices.createOrderCreated(order.id).catch((error) => {
+          console.error('[Notification] Failed to create paid order notification:', error)
+        })
+
         try {
           const cartType = mapOrderTypeToCartType(order.type)
           await cartsServices.clearCart(cartType, order.customerId || order.sessionId)
@@ -186,6 +198,14 @@ const paymentController = {
         })
       })
 
+      await notificationsServices.createOrderStatusNotification({
+        orderId: order.id,
+        previousStatus: OrderStatus.PENDING_PAYMENT,
+        status: OrderStatus.PAYMENT_FAILED
+      }).catch((error) => {
+        console.error('[Notification] Failed to create payment failure notification:', error)
+      })
+
       return res.status(200).json(IpnSuccess)
     } catch (error) {
       console.error('IPN error', error)
@@ -204,6 +224,13 @@ const paymentController = {
     const staffId = req.decoded_authorization?.user_id as string
 
     const data = await paymentServices.cashConfirm({ orderId, staffId })
+    await notificationsServices.createOrderStatusNotification({
+      orderId,
+      previousStatus: OrderStatus.PENDING_CONFIRMATION,
+      status: OrderStatus.CONFIRMED
+    }).catch((error) => {
+      console.error('[Notification] Failed to create cash confirmation notification:', error)
+    })
     return res.json(ApiResponse('Xác nhận thanh toán thành công', data))
   }
 
