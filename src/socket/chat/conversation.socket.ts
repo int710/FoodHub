@@ -1,6 +1,6 @@
 import { Server, Socket } from 'socket.io'
 
-import { getConversationRoom, HOST_ROOM } from './socket.room'
+import { getConversationRoom, HOST_ROOM } from '../socket.room'
 import { ConversationModel } from '~/models/mongodb/conversation.model'
 import { SenderRole } from '~/models/mongodb/message.model'
 import { ConversationServices } from '~/services/conversation.services'

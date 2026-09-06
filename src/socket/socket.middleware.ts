@@ -17,7 +17,7 @@ export interface SocketUserType {
 
 declare module "socket.io" {
   interface SocketData {
-    user: SocketUserType;
+    user?: SocketUserType;
   }
 }
 

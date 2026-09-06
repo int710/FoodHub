@@ -4,6 +4,7 @@ import { HistoryQuery, KitchenQuery } from "~/models/schemas/order.schema"
 import HTTP_STATUS from '~/constants/httpStatus'
 import { ErrorWithStatus } from '~/models/Errors'
 import { PaymentStatus } from '~/generated/prisma/enums'
+import { emitOrderStatusUpdate } from "~/socket/orders/order.emitter"
 
 const orderDetailInclude = {
   table: {
@@ -140,14 +141,14 @@ class OrdersServices {
       })
     }
 
-    if (order.status !== OrderStatus.PENDING) {
+    if (order.status !== OrderStatus.PENDING_CONFIRMATION) {
       throw new ErrorWithStatus({
         httpStatusCode: HTTP_STATUS.BAD_REQUEST,
         message: 'Chỉ có thể xác nhận đơn đang chờ'
       })
     }
 
-    return prisma.order.update({
+    const updatedOrder = await prisma.order.update({
       where: { id: orderId },
       data: {
         status: OrderStatus.CONFIRMED,
@@ -156,9 +157,24 @@ class OrdersServices {
       },
       include: orderDetailInclude
     })
+
+    emitOrderStatusUpdate({
+      orderId: updatedOrder.id,
+      orderType: updatedOrder.type,
+      previousStatus: OrderStatus.PENDING_CONFIRMATION,
+      status: updatedOrder.status,
+      updatedAt: (updatedOrder.confirmAt || new Date()).toISOString(),
+      updatedBy: {
+        userId: staffId,
+        role: 'STAFF'
+      }
+    })
+
+    return updatedOrder
   }
 
-  async rejectOrder(orderId: string, reason: string) {
+  async rejectOrder(orderId: string, reason: string, staffId?: string, role?: 'STAFF' | 'ADMIN'
+  ) {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
@@ -175,21 +191,23 @@ class OrdersServices {
       })
     }
 
-    if (order.status !== OrderStatus.PENDING) {
+    if (order.status !== OrderStatus.PENDING_CONFIRMATION) {
       throw new ErrorWithStatus({
         httpStatusCode: HTTP_STATUS.BAD_REQUEST,
-        message: 'Chỉ có thể từ chối đơn đang chờ'
+        message: 'Chỉ có thể từ chối đơn đang ở trạng thái chờ xác nhận'
       })
     }
 
-    if (order.payments.some((payment) => payment.status === PaymentStatus.SUCCESS)) {
+    if (order.payments.some((payment) => payment.status === PaymentStatus.PAID)) {
       throw new ErrorWithStatus({
         httpStatusCode: HTTP_STATUS.CONFLICT,
         message: 'Đơn đã thanh toán, cần xử lý hoàn tiền trước khi từ chối'
       })
     }
 
-    return prisma.order.update({
+    const previousStatus = order.status
+
+    const updatedOrder = await prisma.order.update({
       where: { id: orderId },
       data: {
         status: OrderStatus.CANCELLED,
@@ -197,6 +215,20 @@ class OrdersServices {
       },
       include: orderDetailInclude
     })
+
+    emitOrderStatusUpdate({
+      orderId: updatedOrder.id,
+      orderType: updatedOrder.type,
+      previousStatus,
+      status: updatedOrder.status,
+      updatedAt: updatedOrder.updatedAt ? updatedOrder.updatedAt.toISOString() : new Date().toISOString(),
+      updatedBy: staffId ? {
+        userId: staffId,
+        role: role || 'STAFF'
+      } : undefined
+    })
+
+    return updatedOrder
   }
 
   async updateKitchenItemStatus(itemId: string, status: ItemStatus) {
@@ -209,6 +241,8 @@ class OrdersServices {
           status: true,
           order: {
             select: {
+              id: true,
+              type: true,
               status: true
             }
           }
@@ -239,6 +273,12 @@ class OrdersServices {
         })
       }
 
+      const previousItemStatus = item.status
+      const initialOrderStatus = item.order.status
+
+      let orderStatusChanged = false
+      let updatedOrder = null
+
       const updatedItem = await tx.orderItem.update({
         where: { id: itemId },
         data: { status },
@@ -249,11 +289,12 @@ class OrdersServices {
         }
       })
 
-      if (status === ItemStatus.PREPARING) {
-        await tx.order.update({
+      if (status === ItemStatus.PREPARING && initialOrderStatus === OrderStatus.CONFIRMED) {
+        updatedOrder = await tx.order.update({
           where: { id: item.orderId },
           data: { status: OrderStatus.PREPARING }
         })
+        orderStatusChanged = true
       }
 
       if (status === ItemStatus.READY) {
@@ -265,22 +306,29 @@ class OrdersServices {
         })
 
         if (unfinishedCount === 0) {
-          await tx.order.update({
+          updatedOrder = await tx.order.update({
             where: { id: item.orderId },
             data: {
               status: OrderStatus.READY,
               readyAt: new Date()
             }
           })
+          orderStatusChanged = true
         }
       }
 
-      return updatedItem
+      return {
+        updatedItem,
+        previousItemStatus,
+        orderStatusChanged,
+        previousOrderStatus: initialOrderStatus,
+        order: updatedOrder || item.order
+      }
     })
   }
 
   async serveOrder(orderId: string) {
-    return prisma.$transaction(async (tx) => {
+    const updatedOrder = await prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: orderId },
         select: {
@@ -327,6 +375,15 @@ class OrdersServices {
         include: orderDetailInclude
       })
     })
+    emitOrderStatusUpdate({
+      orderId: updatedOrder.id,
+      orderType: updatedOrder.type,
+      previousStatus: OrderStatus.READY,
+      status: updatedOrder.status,
+      updatedAt: (updatedOrder.servedAt || new Date()).toISOString()
+    })
+
+    return updatedOrder
   }
 
   async cancelOrder(orderId: string, actorId: string, actorRole: Role, reason: string) {
@@ -357,13 +414,13 @@ class OrdersServices {
     // Customer chỉ được hủy trước khi staff xác nhận.
     const allowedStatuses =
       actorRole === Role.CUSTOMER
-        ? [OrderStatus.PENDING]
-        : [OrderStatus.PENDING, OrderStatus.CONFIRMED]
+        ? [OrderStatus.PENDING_CONFIRMATION]
+        : [OrderStatus.PENDING_CONFIRMATION, OrderStatus.CONFIRMED]
 
     const canCancel =
       actorRole === Role.CUSTOMER
-        ? order.status === OrderStatus.PENDING
-        : order.status === OrderStatus.PENDING ||
+        ? order.status === OrderStatus.PENDING_CONFIRMATION
+        : order.status === OrderStatus.PENDING_CONFIRMATION ||
         order.status === OrderStatus.CONFIRMED
 
     if (!canCancel) {
@@ -373,14 +430,16 @@ class OrdersServices {
       })
     }
 
-    if (order.payments.some((payment) => payment.status === PaymentStatus.SUCCESS)) {
+    if (order.payments.some((payment) => payment.status === PaymentStatus.PAID)) {
       throw new ErrorWithStatus({
         httpStatusCode: HTTP_STATUS.CONFLICT,
         message: 'Đơn đã thanh toán, cần xử lý hoàn tiền trước khi hủy'
       })
     }
 
-    return prisma.order.update({
+    const previousStatus = order.status
+
+    const updatedOrder = await prisma.order.update({
       where: { id: orderId },
       data: {
         status: OrderStatus.CANCELLED,
@@ -388,6 +447,20 @@ class OrdersServices {
       },
       include: orderDetailInclude
     })
+
+    emitOrderStatusUpdate({
+      orderId: updatedOrder.id,
+      orderType: updatedOrder.type,
+      previousStatus,
+      status: updatedOrder.status,
+      updatedAt: new Date().toISOString(),
+      updatedBy: {
+        userId: actorId,
+        role: Role.ADMIN
+      }
+    })
+
+    return updatedOrder
   }
 }
 
