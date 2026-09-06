@@ -1,11 +1,13 @@
 import { Server as HttpServer } from "http";
 import { Server } from "socket.io";
 import { socketAuthMiddleware } from "./socket.middleware";
-import { registerHostSocket } from "./host.socket";
-import { registerConversationSocket } from "./conversation.socket";
-import { registerMessageSocket } from "./message.socket";
-import { RegisterTypingSocket } from "./typing.handler";
-import { presenceManager } from "./presence.manage";
+import { registerHostSocket } from "./chat/host.socket";
+import { registerConversationSocket } from "./chat/conversation.socket";
+import { registerMessageSocket } from "./chat/message.socket";
+import { RegisterTypingSocket } from "./chat/typing.handler";
+import { presenceManager } from "./chat/presence.manage";
+import { setSocketIO } from "./socket.instance";
+import { registerOrderSocket } from "./orders/order.socket";
 
 export const initSocket = (httpServer: HttpServer) => {
   const io = new Server(httpServer, {
@@ -14,6 +16,7 @@ export const initSocket = (httpServer: HttpServer) => {
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
     }
   })
+  setSocketIO(io)
 
   io.use(socketAuthMiddleware)
 
@@ -32,6 +35,8 @@ export const initSocket = (httpServer: HttpServer) => {
     registerConversationSocket(io, socket)
     registerMessageSocket(io, socket)
     RegisterTypingSocket(io, socket)
+
+    registerOrderSocket(io, socket)
 
     socket.on('disconnect', (reason) => {
       const isNowOffline = presenceManager.removeSocket(userId, socket.id)

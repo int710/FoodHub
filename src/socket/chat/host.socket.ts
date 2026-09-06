@@ -1,5 +1,5 @@
 import { Server, Socket } from "socket.io";
-import { HOST_ROOM } from "./socket.room";
+import { HOST_ROOM } from "../socket.room";
 
 
 export const registerHostSocket = (_io: Server, socket: Socket) => {

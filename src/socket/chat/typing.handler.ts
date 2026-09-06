@@ -1,5 +1,5 @@
 import { Server, Socket } from "socket.io"
-import { getConversationRoom } from "./socket.room"
+import { getConversationRoom } from "../socket.room"
 
 interface TypingPayload {
   conversationId: string

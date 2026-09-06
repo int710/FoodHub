@@ -2,7 +2,7 @@ import { Server, Socket } from "socket.io";
 import { ConversationModel, ConversationStatus } from "~/models/mongodb/conversation.model";
 import { MessageModel, MessageType, SenderRole } from "~/models/mongodb/message.model";
 
-import { getConversationRoom, HOST_ROOM } from "./socket.room";
+import { getConversationRoom, HOST_ROOM } from "../socket.room";
 import { ConversationServices } from "~/services/conversation.services";
 
 interface SendMessagePayload {

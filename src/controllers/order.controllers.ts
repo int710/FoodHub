@@ -21,6 +21,8 @@ import {
   updateKitchenItemStatusSchema
 } from '~/models/schemas/order.schema'
 import { vnpay } from '~/config/vnpay'
+import { emitOrderItemStatusUpdate, emitOrderStatusUpdate } from '~/socket/orders/order.emitter'
+import { TokenPayload } from '~/models/schemas/token.schema'
 
 function mapOrderTypeToCartType(type: OrderType): CartType {
   if (type === OrderType.DINE_IN) return CartType.DINE_IN
@@ -283,14 +285,41 @@ export const ordersController = {
   },
 
   async updateKitchenStatus(req: Request, res: Response) {
+    const { user_id, role } = req.decoded_authorization as TokenPayload
     const { params, body } = updateKitchenItemStatusSchema.parse({
       params: req.params,
       body: req.body
     })
 
-    const item = await ordersServices.updateKitchenItemStatus(params.itemId, body.status)
+    const { updatedItem, previousItemStatus, orderStatusChanged, previousOrderStatus, order } = await ordersServices.updateKitchenItemStatus(params.itemId, body.status)
 
-    return res.json(ApiResponse('Cập nhật trạng thái món thành công', item))
+    emitOrderItemStatusUpdate({
+      orderId: updatedItem.orderId,
+      itemId: updatedItem.id,
+      previousStatus: previousItemStatus,
+      status: updatedItem.status,
+      updatedAt: new Date().toISOString(),
+      updatedBy: {
+        userId: user_id,
+        role: role,
+      }
+    })
+
+    if (orderStatusChanged && order) {
+      emitOrderStatusUpdate({
+        orderId: order.id,
+        orderType: order.type,
+        previousStatus: previousOrderStatus,
+        status: order.status,
+        updatedAt: new Date().toISOString(),
+        updatedBy: {
+          userId: user_id,
+          role: role,
+        }
+      })
+    }
+
+    return res.json(ApiResponse('Cập nhật trạng thái món thành công', updatedItem))
   },
 
   async serve(req: Request, res: Response) {
