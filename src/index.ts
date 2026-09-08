@@ -6,6 +6,7 @@ import { defaultErrorHandler } from './middlewares/errors.middlewares'
 import { initFolderUpload } from './utils/file'
 import { createServer } from 'http'
 import { initSocket } from './socket/socket'
+import { registerSwagger } from './config/swagger'
 config()
 
 const PORT = process.env.PORT
@@ -15,6 +16,8 @@ const httpServer = createServer(app);
 const io = initSocket(httpServer)
 
 app.use(express.json())
+
+registerSwagger(app)
 
 initConnectSystem()
 initFolderUpload()

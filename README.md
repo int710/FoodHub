@@ -58,6 +58,22 @@ REST API có tiền tố:
 /api/v1
 ```
 
+## Swagger / OpenAPI
+
+Trong development, Swagger UI được bật mặc định tại:
+
+```text
+http://localhost:4000/api-docs
+```
+
+OpenAPI JSON:
+
+```text
+http://localhost:4000/api-docs.json
+```
+
+Trong production, Swagger chỉ được bật khi `SWAGGER_ENABLED=true` và bắt buộc Basic Auth bằng `SWAGGER_USER`/`SWAGGER_PASSWORD`. Không commit credential Swagger thật vào repository.
+
 ### Biến môi trường
 
 Tạo file `.env` ở thư mục gốc:
@@ -83,6 +99,12 @@ SECRET_TABLE_TOKEN=change-me
 VNPAY_TMN_CODE=your_sandbox_tmn_code
 VNPAY_HASH_SECRET=your_sandbox_hash_secret
 VNPAY_RETURN_URL=http://localhost:4000/api/v1/payment/vnpay/return
+
+SWAGGER_ENABLED=true
+SWAGGER_USER=swagger
+SWAGGER_PASSWORD=change-this-password
+API_BASE_URL=http://localhost:4000
+API_VERSION=1.0.0
 ```
 
 Email và Cloudflare R2 cần thêm các biến tương ứng được sử dụng trong `src/utils/send-email.ts` và `src/utils/r2.ts`.
