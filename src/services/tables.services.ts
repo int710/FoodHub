@@ -9,18 +9,11 @@ import { ErrorWithStatus } from '~/models/Errors'
 import { TableReqBody } from '~/models/schemas/table.schema'
 import { signToken } from '~/utils/jwt'
 import { generateQR } from '~/utils/QRCode'
-
-const OCCUPYING_ORDER_STATUSES = [
-  'PENDING_PAYMENT',
-  'PENDING_CONFIRMATION',
-  'CONFIRMED',
-  'PREPARING',
-  'READY',
-  'SERVED'
-] as const
+import { expireStaleVnpayOrders, occupyingOrderWhere } from '~/services/order-expiration.services'
 
 class TableServices {
   async getAllTables() {
+    await expireStaleVnpayOrders()
     const tables = await prisma.table.findMany({
       select: {
         id: true,
@@ -30,7 +23,7 @@ class TableServices {
         note: true,
         isActive: true,
         orders: {
-          where: { status: { in: [...OCCUPYING_ORDER_STATUSES] } },
+          where: occupyingOrderWhere(),
           select: { id: true, status: true },
           take: 1
         }
@@ -123,15 +116,12 @@ class TableServices {
   }
 
   async scanQR(qrToken: string) {
+    await expireStaleVnpayOrders()
     const table = await prisma.table.findUnique({
       where: { qrToken },
       include: {
         orders: {
-          where: {
-            status: {
-              in: [...OCCUPYING_ORDER_STATUSES]
-            }
-          },
+          where: occupyingOrderWhere(),
           select: { id: true, status: true },
           take: 1
         }
@@ -157,11 +147,7 @@ class TableServices {
           isActive: true,
           id: { not: table.id },
           orders: {
-            none: {
-              status: {
-                in: [...OCCUPYING_ORDER_STATUSES]
-              }
-            }
+            none: occupyingOrderWhere()
           }
         },
         select: { id: true, name: true, capacity: true, floor: true },

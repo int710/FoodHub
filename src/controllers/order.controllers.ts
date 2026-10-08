@@ -20,7 +20,8 @@ import {
 import { emitOrderItemStatusUpdate, emitOrderStatusUpdate } from '~/socket/orders/order.emitter'
 import { TokenPayload } from '~/models/schemas/token.schema'
 import notificationsServices from '~/services/notifications.services'
-import { buildVnpayPaymentUrl, getClientIp } from '~/utils/vnpay-payment'
+import { buildVnpayPaymentUrl, getClientIp, VNPAY_PAYMENT_TIMEOUT_MS } from '~/utils/vnpay-payment'
+import { expireStaleVnpayOrders } from '~/services/order-expiration.services'
 
 function mapOrderTypeToCartType(type: OrderType): CartType {
   if (type === OrderType.DINE_IN) return CartType.DINE_IN
@@ -87,14 +88,11 @@ export const ordersController = {
     }
 
     const cartType = mapOrderTypeToCartType(orderContext.type)
-
-    const cart = await cartsServices.getCart(cartType, ownerId)
-    if (!cart.items.length) {
-      throw new ErrorWithStatus({
-        httpStatusCode: HTTP_STATUS.BAD_REQUEST,
-        message: 'Giỏ hàng đang trống'
-      })
-    }
+    const paymentMethod =
+      body.paymentMethod && Object.values(PaymentMethod).includes(body.paymentMethod as PaymentMethod)
+        ? (body.paymentMethod as PaymentMethod)
+        : PaymentMethod.CASH
+    const isVnpay = paymentMethod === PaymentMethod.VNPAY
 
     if (tableId) {
       const existTable = await prisma.table.findUnique({
@@ -107,27 +105,81 @@ export const ordersController = {
           message: 'Bàn không tồn tại, vui lòng kiểm tra lại QR'
         })
       }
+    }
 
-      const orderWaitingForConfirmation = await prisma.order.findFirst({
-        where: {
-          tableId,
-          status: {
-            in: [OrderStatus.PENDING_PAYMENT, OrderStatus.PENDING_CONFIRMATION]
-          }
-        },
-        select: { id: true }
+    // Render có thể sleep nên không dựa vào cron: dọn giao dịch hết hạn ngay
+    // trước checkout, sau đó mới quyết định tiếp tục hay tạo đơn mới.
+    await expireStaleVnpayOrders()
+    const ownerWhere: Prisma.OrderWhereInput = tableId
+      ? { tableId }
+      : orderContext.type === OrderType.TAKEAWAY
+        ? { type: OrderType.TAKEAWAY, sessionId: ownerId }
+        : { type: OrderType.DELIVERY, customerId: ownerId }
+    const existingOrder = await prisma.order.findFirst({
+      where: {
+        ...ownerWhere,
+        status: { in: [OrderStatus.PENDING_PAYMENT, OrderStatus.PENDING_CONFIRMATION] }
+      },
+      include: { payments: true },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    if (existingOrder?.status === OrderStatus.PENDING_CONFIRMATION) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.CONFLICT,
+        message: 'Đơn trước đang chờ quán xác nhận. Bạn có thể gọi thêm món sau khi quán xác nhận.'
       })
-      if (orderWaitingForConfirmation) {
-        throw new ErrorWithStatus({
-          httpStatusCode: HTTP_STATUS.CONFLICT,
-          message: 'Bàn đang có đơn chờ xác nhận, vui lòng đợi quán xác nhận trước khi đặt thêm'
+    }
+
+    if (existingOrder?.status === OrderStatus.PENDING_PAYMENT) {
+      const pendingVnpay = existingOrder.payments.find(
+        (payment) => payment.method === PaymentMethod.VNPAY && payment.status === PaymentStatus.PENDING
+      )
+
+      if (isVnpay && pendingVnpay) {
+        const expireAt = new Date(Date.now() + VNPAY_PAYMENT_TIMEOUT_MS)
+        await prisma.order.update({
+          where: { id: existingOrder.id },
+          data: { expireAt }
         })
+        const paymentUrl = buildVnpayPaymentUrl({
+          amount: Number(existingOrder.totalAmount.toString()),
+          orderCode: existingOrder.orderCode,
+          clientIp: getClientIp(req)
+        })
+        return res.json(ApiResponse('Tiếp tục thanh toán đơn VNPay đang chờ', {
+          order: { ...existingOrder, expireAt },
+          paymentUrl,
+          orderCode: existingOrder.orderCode,
+          resumed: true
+        }))
       }
+
+      // Người dùng chủ động đổi sang tiền mặt: kết thúc giao dịch VNPay cũ rồi
+      // tạo đơn CASH từ giỏ hiện tại, không để một bàn có hai đơn chờ thanh toán.
+      await prisma.$transaction([
+        prisma.order.update({
+          where: { id: existingOrder.id },
+          data: { status: OrderStatus.PAYMENT_FAILED }
+        }),
+        prisma.payment.updateMany({
+          where: { orderId: existingOrder.id, status: PaymentStatus.PENDING },
+          data: { status: PaymentStatus.FAILED }
+        })
+      ])
+    }
+
+    const cart = await cartsServices.getCart(cartType, ownerId)
+    if (!cart.items.length) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.BAD_REQUEST,
+        message: 'Giỏ hàng đang trống'
+      })
     }
 
     const menuItems = await prisma.menuItem.findMany({
       where: { id: { in: cart.items.map((i) => i.menuItemId) } },
-      select: { id: true, name: true, basePrice: true, isAvailable: true }
+      select: { id: true, name: true, image: true, basePrice: true, isAvailable: true }
     })
     const menuMap = new Map(menuItems.map((i) => [i.id, i]))
 
@@ -147,10 +199,33 @@ export const ordersController = {
       })
     }
 
+    const selectedOptionIds = [...new Set(cart.items.flatMap((item) => item.variantOptionIds || []))]
+    const selectedOptions = selectedOptionIds.length
+      ? await prisma.variantOption.findMany({
+          where: { id: { in: selectedOptionIds }, isActive: true },
+          select: { id: true, name: true, priceAdd: true, group: { select: { itemId: true } } }
+        })
+      : []
+    const optionMap = new Map(selectedOptions.map((option) => [option.id, option]))
+    const hasInvalidOption = cart.items.some((item) =>
+      (item.variantOptionIds || []).some((id) => {
+        const option = optionMap.get(id)
+        return !option || option.group.itemId !== item.menuItemId
+      })
+    )
+    if (hasInvalidOption) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.BAD_REQUEST,
+        message: 'Một số tùy chọn món không còn hợp lệ, vui lòng chọn lại'
+      })
+    }
+
     let subtotal = 0
     const orderItemsData = cart.items.map((item) => {
       const menuItem = menuMap.get(item.menuItemId)!
-      const unitPrice = Number(menuItem.basePrice.toString())
+      const itemOptions = (item.variantOptionIds || []).map((id) => optionMap.get(id)!)
+      const unitPrice = Number(menuItem.basePrice.toString()) +
+        itemOptions.reduce((sum, option) => sum + Number(option.priceAdd.toString()), 0)
       const subTotal = Number((unitPrice * item.quantity).toFixed(2))
       subtotal += subTotal
 
@@ -162,9 +237,15 @@ export const ordersController = {
         snapshot: {
           menuItemId: item.menuItemId,
           name: menuItem.name,
+          image: menuItem.image,
           quantity: item.quantity,
           note: item.note || '',
-          variantOptionIds: item.variantOptionIds || []
+          variantOptionIds: item.variantOptionIds || [],
+          variantOptions: itemOptions.map((option) => ({
+            id: option.id,
+            name: option.name,
+            priceAdd: Number(option.priceAdd.toString())
+          }))
         },
         status: ItemStatus.WAITING,
         note: item.note || null
@@ -174,12 +255,6 @@ export const ordersController = {
     const vatAmount = Number((subtotal * 0.1).toFixed(2))
     const totalAmount = Number((subtotal + vatAmount).toFixed(2))
 
-    const paymentMethod =
-      body.paymentMethod && Object.values(PaymentMethod).includes(body.paymentMethod as PaymentMethod)
-        ? (body.paymentMethod as PaymentMethod)
-        : PaymentMethod.CASH
-
-    const isVnpay = paymentMethod === PaymentMethod.VNPAY // Thanh toan thẻ ví
     const orderStatus = isVnpay ? OrderStatus.PENDING_PAYMENT : OrderStatus.PENDING_CONFIRMATION
     const paymentStatus = isVnpay ? PaymentStatus.PENDING : PaymentStatus.UNPAID
 
@@ -202,7 +277,7 @@ export const ordersController = {
           totalAmount: new Prisma.Decimal(totalAmount.toFixed(2)),
           deliveryInfo: body.deliveryInfo ? (body.deliveryInfo as Prisma.InputJsonValue) : undefined,
           // Thêm expire cho VNPay
-          ...(isVnpay ? { expireAt: new Date(Date.now() + 15 * 60 * 1000) } : {})
+          ...(isVnpay ? { expireAt: new Date(Date.now() + VNPAY_PAYMENT_TIMEOUT_MS) } : {})
         }
       })
 
@@ -223,9 +298,7 @@ export const ordersController = {
       return order
     })
 
-    if (!isVnpay) {
-      await cartsServices.clearCart(cartType, ownerId)
-    } if (isVnpay) {
+    if (isVnpay) {
       const paymentUrl = buildVnpayPaymentUrl({
         amount: totalAmount,
         orderCode,
@@ -239,7 +312,7 @@ export const ordersController = {
       }))
     }
 
-    // CASH
+    // CASH: đơn đã được gửi quán nên giỏ mới được xóa.
     await cartsServices.clearCart(cartType, ownerId)
     await notificationsServices.createOrderCreated(createdOrder.id).catch((error) => {
       console.error('[Notification] Failed to create new order notification:', error)
