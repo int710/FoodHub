@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "npx nodemon",
     "build": "rimraf ./dist && tsc && tsc-alias && node -e \"require('fs').copyFileSync('src/utils/template-email.html', 'dist/utils/template-email.html')\"",
+    "render-build": "npm ci --include=dev && npx prisma generate && npm run build && npx prisma migrate deploy",
     "start": "node dist/index.js",
+    "seed": "tsx prisma/seed.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "prettier": "prettier --check .",

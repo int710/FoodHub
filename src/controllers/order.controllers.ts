@@ -6,9 +6,6 @@ import { ItemStatus, OrderStatus, OrderType, PaymentMethod, PaymentStatus, Role 
 import { ApiResponse } from '~/models/ApiResponse'
 import { ErrorWithStatus } from '~/models/Errors'
 import { HistoryQuery, kitchenOrdersQuerySchema, KitchenQuery } from '~/models/schemas/order.schema'
-import { VNPay } from 'vnpay'
-import { ProductCode, VnpLocale } from 'vnpay/enums'
-import { dateFormat } from 'vnpay/utils'
 import cartsServices, { CartType } from '~/services/carts.services'
 import ordersServices from '~/services/orders.services'
 import { orderHistoryQuerySchema } from '~/models/schemas/order.schema'
@@ -20,10 +17,10 @@ import {
   serveOrderSchema,
   updateKitchenItemStatusSchema
 } from '~/models/schemas/order.schema'
-import { vnpay } from '~/config/vnpay'
 import { emitOrderItemStatusUpdate, emitOrderStatusUpdate } from '~/socket/orders/order.emitter'
 import { TokenPayload } from '~/models/schemas/token.schema'
 import notificationsServices from '~/services/notifications.services'
+import { buildVnpayPaymentUrl, getClientIp } from '~/utils/vnpay-payment'
 
 function mapOrderTypeToCartType(type: OrderType): CartType {
   if (type === OrderType.DINE_IN) return CartType.DINE_IN
@@ -229,17 +226,10 @@ export const ordersController = {
     if (!isVnpay) {
       await cartsServices.clearCart(cartType, ownerId)
     } if (isVnpay) {
-      const ip = req.headers['x-forwarded-for']?.toString().split(',')[0] || req.socket.remoteAddress || '127.0.0.1'
-      const paymentUrl = vnpay.buildPaymentUrl({
-        vnp_Amount: totalAmount, // lib tự x100
-        vnp_IpAddr: ip.replace(/^::ffff:/, ''),
-        vnp_TxnRef: orderCode, // QUAN TRỌNG: dùng orderCode, không dùng order.id
-        vnp_OrderInfo: `Thanh toan FoodHub ${orderCode}`,
-        vnp_OrderType: ProductCode.Other,
-        vnp_ReturnUrl: process.env.VNPAY_RETURN_URL!,
-        vnp_Locale: VnpLocale.VN,
-        vnp_CreateDate: dateFormat(new Date()),
-        vnp_ExpireDate: dateFormat(new Date(Date.now() + 15 * 60 * 1000)),
+      const paymentUrl = buildVnpayPaymentUrl({
+        amount: totalAmount,
+        orderCode,
+        clientIp: getClientIp(req)
       })
 
       return res.json(ApiResponse('Tạo đơn hàng VNPay, vui lòng thanh toán', {

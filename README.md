@@ -51,6 +51,12 @@ npm run build
 npm start
 ```
 
+Render build (cần cài `devDependencies` chứa TypeScript, `rimraf` và `tsc-alias`):
+
+```bash
+npm run render-build
+```
+
 Server mặc định chạy tại `http://localhost:PORT` và Socket.IO dùng cùng port.
 REST API có tiền tố:
 
@@ -99,6 +105,10 @@ SECRET_TABLE_TOKEN=change-me
 VNPAY_TMN_CODE=your_sandbox_tmn_code
 VNPAY_HASH_SECRET=your_sandbox_hash_secret
 VNPAY_RETURN_URL=http://localhost:4000/api/v1/payment/vnpay/return
+VNPAY_IPN_URL=http://localhost:4000/api/v1/payment/vnpay/ipn
+VNPAY_TEST_MODE=true
+VNPAY_HOST=https://sandbox.vnpayment.vn
+ANDROID_PAYMENT_DEEP_LINK=foodhub://payment/result
 
 SWAGGER_ENABLED=true
 SWAGGER_USER=swagger
@@ -264,8 +274,15 @@ Nhánh lỗi/hủy: `PAYMENT_FAILED`, `CANCELLED`.
 | POST | `/payment/vnpay/create` | Public |
 | GET | `/payment/vnpay/return` | VNPay redirect |
 | GET | `/payment/vnpay/ipn` | VNPay callback |
+| GET | `/payment/vnpay/status/:orderCode` | Public, chỉ trả trạng thái tối thiểu để app poll sau redirect |
 | GET | `/payment/:orderId` | Public |
 | PATCH | `/payment/:orderId/cash-confirm` | Admin/Staff |
+
+Với Android, app mở `paymentUrl` bằng Chrome Custom Tabs. Sau thanh toán,
+`/payment/vnpay/return` xác minh checksum rồi redirect về
+`ANDROID_PAYMENT_DEEP_LINK`. App lấy `orderCode` từ deep link và poll
+`/payment/vnpay/status/:orderCode` cho đến khi `shouldPoll=false`. Chỉ IPN
+được dùng để cập nhật trạng thái thanh toán trong database.
 
 ### Review và media
 
