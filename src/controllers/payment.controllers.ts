@@ -18,7 +18,8 @@ import { ApiResponse } from '~/models/ApiResponse'
 import paymentServices from '~/services/payments.services'
 import notificationsServices from '~/services/notifications.services'
 import { emitOrderStatusUpdate } from '~/socket/orders/order.emitter'
-import { buildVnpayPaymentUrl, getClientIp } from '~/utils/vnpay-payment'
+import { buildVnpayPaymentUrl, getClientIp, VNPAY_PAYMENT_TIMEOUT_MS } from '~/utils/vnpay-payment'
+import { expireStaleVnpayOrders } from '~/services/order-expiration.services'
 
 const mapOrderTypeToCartType = (type: OrderType): CartType => {
   if (type === OrderType.DINE_IN) return CartType.DINE_IN
@@ -56,7 +57,7 @@ const paymentController = {
       return res.status(400).json({ message: 'Thiếu orderCode' })
     }
 
-    const order = await prisma.order.findUnique({
+    let order = await prisma.order.findUnique({
       where: { orderCode },
       include: { payments: true }
     })
@@ -64,6 +65,13 @@ const paymentController = {
     if (!order) {
       return res.status(404).json({ message: 'Không tìm thấy đơn' })
     }
+
+    await expireStaleVnpayOrders(order.id)
+    order = await prisma.order.findUnique({
+      where: { orderCode },
+      include: { payments: true }
+    })
+    if (!order) return res.status(404).json({ message: 'Không tìm thấy đơn' })
 
     if (order.status !== OrderStatus.PENDING_PAYMENT) {
       return res.status(400).json({
@@ -75,6 +83,12 @@ const paymentController = {
     if (!payment || payment.status !== PaymentStatus.PENDING) {
       return res.status(400).json({ message: 'Giao dịch VNPay của đơn không còn ở trạng thái chờ' })
     }
+
+    // Link mới có vnp_ExpireDate mới, nên hạn trong DB phải được gia hạn cùng lúc.
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { expireAt: new Date(Date.now() + VNPAY_PAYMENT_TIMEOUT_MS) }
+    })
 
     const paymentUrl = buildVnpayPaymentUrl({
       amount: Number(order.totalAmount.toString()),
@@ -247,6 +261,13 @@ const paymentController = {
   },
 
   async paymentStatus(req: Request<{ orderCode: string }>, res: Response) {
+    const current = await prisma.order.findUnique({
+      where: { orderCode: req.params.orderCode },
+      select: { id: true }
+    })
+    if (!current) return res.status(404).json({ message: 'Không tìm thấy đơn hàng' })
+    await expireStaleVnpayOrders(current.id)
+
     const order = await prisma.order.findUnique({
       where: { orderCode: req.params.orderCode },
       select: {
@@ -264,9 +285,7 @@ const paymentController = {
       }
     })
 
-    if (!order) {
-      return res.status(404).json({ message: 'Không tìm thấy đơn hàng' })
-    }
+    if (!order) return res.status(404).json({ message: 'Không tìm thấy đơn hàng' })
 
     const payment = order.payments[0]
     return res.json(

@@ -4,6 +4,7 @@ import { RedisKey } from '~/constants/redis'
 import { ErrorWithStatus } from '~/models/Errors'
 import { CartItem, UpdateDetailItemType } from '~/models/schemas/order.schema'
 import { metadataType } from '~/models/types'
+import { prisma } from '~/config/prisma'
 
 export enum CartType {
   DINE_IN = 'dine-in',
@@ -35,7 +36,7 @@ class CartServices {
     return 7 * 24 * 3600 // delivery 7 ngày
   }
 
-  async getCart(type: CartType, ownerId: string) {
+  private async getStoredCart(type: CartType, ownerId: string) {
     const key = this.getKey(type, ownerId)
     const rawData = await redis.hgetall(key)
 
@@ -67,9 +68,61 @@ class CartServices {
     return { items, metadata }
   }
 
+  async getCart(type: CartType, ownerId: string) {
+    const cart = await this.getStoredCart(type, ownerId)
+    if (!cart.items.length) return { ...cart, totalAmount: 0 }
+
+    const menuItems = await prisma.menuItem.findMany({
+      where: { id: { in: cart.items.map((item) => item.menuItemId) } },
+      select: { id: true, name: true, image: true, basePrice: true }
+    })
+    const optionIds = [...new Set(cart.items.flatMap((item) => item.variantOptionIds || []))]
+    const options = optionIds.length
+      ? await prisma.variantOption.findMany({
+          where: { id: { in: optionIds } },
+          select: { id: true, name: true, priceAdd: true }
+        })
+      : []
+    const menuMap = new Map(menuItems.map((item) => [item.id, item]))
+    const optionMap = new Map(options.map((option) => [option.id, option]))
+
+    const items = cart.items.map((item) => {
+      const menuItem = menuMap.get(item.menuItemId)
+      const variantOptions = (item.variantOptionIds || [])
+        .map((id) => optionMap.get(id))
+        .filter((option): option is NonNullable<typeof option> => Boolean(option))
+        .map((option) => ({
+          id: option.id,
+          name: option.name,
+          priceAdd: Number(option.priceAdd.toString())
+        }))
+      const unitPrice = Number(menuItem?.basePrice.toString() || 0) +
+        variantOptions.reduce((sum, option) => sum + option.priceAdd, 0)
+
+      return {
+        ...item,
+        name: menuItem?.name || 'Món không còn tồn tại',
+        image: menuItem?.image || null,
+        unitPrice,
+        subTotal: unitPrice * item.quantity,
+        variantOptions
+      }
+    })
+
+    const subtotal = items.reduce((sum, item) => sum + item.subTotal, 0)
+    const vatAmount = Number((subtotal * 0.1).toFixed(2))
+    return {
+      ...cart,
+      items,
+      subtotal,
+      vatAmount,
+      totalAmount: subtotal + vatAmount
+    }
+  }
+
   async addItemToCart(type: CartType, ownerId: string, dto: CartItem, addedBy: string) {
     const key = this.getKey(type, ownerId)
-    const currentCart = await this.getCart(type, ownerId)
+    const currentCart = await this.getStoredCart(type, ownerId)
     const sig = getSig(dto.variantOptionIds)
 
     const found = currentCart.items.find(
@@ -139,7 +192,7 @@ class CartServices {
     if (dto.variantOptionIds !== undefined) item.variantOptionIds = dto.variantOptionIds
 
     const sig = getSig(item.variantOptionIds)
-    const currentCart = await this.getCart(type, ownerId)
+    const currentCart = await this.getStoredCart(type, ownerId)
 
     const existingMatch = currentCart.items.find(
       (i) => i.id !== itemId && i.menuItemId === item.menuItemId && getSig(i.variantOptionIds) === sig && (i.note || '') === (item.note || '')

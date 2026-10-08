@@ -3,6 +3,7 @@ import { ProductCode, VnpLocale } from 'vnpay/enums'
 import { vnpay } from '~/config/vnpay'
 
 const PAYMENT_TIMEOUT_MINUTES = 15
+export const VNPAY_PAYMENT_TIMEOUT_MS = PAYMENT_TIMEOUT_MINUTES * 60 * 1000
 const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh'
 
 const formatVnpayDate = (date: Date): number => {
@@ -42,14 +43,19 @@ export const buildVnpayPaymentUrl = ({
   orderCode: string
   clientIp: string
 }) => {
-  const returnUrl = process.env.VNPAY_RETURN_URL
+  const returnUrl = process.env.VNPAY_RETURN_URL?.trim()
   if (!returnUrl) {
     throw new Error('VNPAY_RETURN_URL is required')
   }
 
+  const parsedReturnUrl = new URL(returnUrl)
+  if (parsedReturnUrl.protocol !== 'https:' && process.env.NODE_ENV === 'production') {
+    throw new Error('VNPAY_RETURN_URL must use HTTPS in production')
+  }
+
   // Format explicitly in Vietnam time so local and Render (UTC) behave identically.
   const createDate = new Date()
-  const expireDate = new Date(createDate.getTime() + PAYMENT_TIMEOUT_MINUTES * 60 * 1000)
+  const expireDate = new Date(createDate.getTime() + VNPAY_PAYMENT_TIMEOUT_MS)
 
   return vnpay.buildPaymentUrl({
     // vnpay@2.x multiplies the supplied VND amount by 100 internally.
