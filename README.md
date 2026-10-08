@@ -211,6 +211,7 @@ QR table được ưu tiên cho `DINE_IN`; không dùng user token để thay th
 
 | Method | Endpoint | Quyền |
 | --- | --- | --- |
+| GET | `/table` | Public - danh sách và trạng thái bàn |
 | GET | `/table/:id` | Public |
 | POST | `/table/scan` | Public |
 | POST | `/table/new` | Admin |

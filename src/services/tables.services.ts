@@ -10,7 +10,40 @@ import { TableReqBody } from '~/models/schemas/table.schema'
 import { signToken } from '~/utils/jwt'
 import { generateQR } from '~/utils/QRCode'
 
+const OCCUPYING_ORDER_STATUSES = [
+  'PENDING_PAYMENT',
+  'PENDING_CONFIRMATION',
+  'CONFIRMED',
+  'PREPARING',
+  'READY',
+  'SERVED'
+] as const
+
 class TableServices {
+  async getAllTables() {
+    const tables = await prisma.table.findMany({
+      select: {
+        id: true,
+        name: true,
+        capacity: true,
+        floor: true,
+        note: true,
+        isActive: true,
+        orders: {
+          where: { status: { in: [...OCCUPYING_ORDER_STATUSES] } },
+          select: { id: true, status: true },
+          take: 1
+        }
+      },
+      orderBy: [{ floor: 'asc' }, { name: 'asc' }]
+    })
+
+    return tables.map(({ orders, ...table }) => ({
+      ...table,
+      status: !table.isActive ? 'INACTIVE' : orders.length > 0 ? 'OCCUPIED' : 'AVAILABLE'
+    }))
+  }
+
   async createNewTable(body: TableReqBody) {
     const { name, capacity, floor, note } = body
     const tableExists = await prisma.table.findUnique({ where: { name } })
@@ -96,16 +129,7 @@ class TableServices {
         orders: {
           where: {
             status: {
-              in: [
-                'PENDING_PAYMENT',
-                'PENDING_CONFIRMATION',
-                'CONFIRMED',
-                'PREPARING',
-                'READY',
-                'SERVED',
-                'CANCELLED',
-                'PAYMENT_FAILED'
-              ]
+              in: [...OCCUPYING_ORDER_STATUSES]
             }
           },
           select: { id: true, status: true },
@@ -135,16 +159,7 @@ class TableServices {
           orders: {
             none: {
               status: {
-                in: [
-                  'PENDING_PAYMENT',
-                  'PENDING_CONFIRMATION',
-                  'PREPARING',
-                  'CONFIRMED',
-                  'SERVED',
-                  'READY',
-                  'CANCELLED',
-                  'PAYMENT_FAILED'
-                ]
+                in: [...OCCUPYING_ORDER_STATUSES]
               }
             }
           }

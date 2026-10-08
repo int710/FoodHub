@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import {
   createTableController,
+  getAllTablesController,
   getQRController,
   getTableByIdController,
   qrScanController,
@@ -13,6 +14,7 @@ import { requestHandler } from '~/utils/requestHandler'
 
 const tablesRouter = Router()
 
+tablesRouter.get('/', requestHandler(getAllTablesController))
 tablesRouter.get('/:id', requestHandler(getTableByIdController))
 tablesRouter.post('/new', authenticate, requireRole('ADMIN'), requestHandler(createTableController))
 tablesRouter.get('/:id/qr', authenticate, requireRole('ADMIN'), requestHandler(getQRController))

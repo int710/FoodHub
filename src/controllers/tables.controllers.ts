@@ -5,6 +5,11 @@ import { ApiResponse } from '~/models/ApiResponse'
 import tableServices from '~/services/tables.services'
 import { TABLE_MESSAGE } from '~/constants/message'
 
+export const getAllTablesController = async (req: Request, res: Response) => {
+  const result = await tableServices.getAllTables()
+  return res.json(ApiResponse('Get tables success', result))
+}
+
 export const createTableController = async (
   req: Request<ParamsDictionary, any, TableReqBody>,
   res: Response,
