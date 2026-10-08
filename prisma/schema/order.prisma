@@ -39,7 +39,7 @@ enum PaymentMethod {
 
 model Order {
   id String @id @default(cuid())
-  orderCode String
+  orderCode String @unique
   pickupCode String?
   tableId String?
   table Table? @relation(fields: [tableId], references: [id], onDelete: SetNull)

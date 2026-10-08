@@ -358,10 +358,16 @@ export const openApiDocument: OpenAPIV3.Document = {
       }
     },
     '/payment/vnpay/return': {
-      get: operation('Handle VNPay browser return', ['Payments'], { '200': successResponse('JSON response when FE_URL is not configured'), '302': { description: 'Redirect to frontend payment result page' } })
+      get: operation('Handle VNPay browser return', ['Payments'], { '302': { description: 'Redirect to the configured Android payment deep link' } })
     },
     '/payment/vnpay/ipn': {
       get: operation('Handle VNPay server callback', ['Payments'], { '200': { description: 'VNPay acknowledgement' } })
+    },
+    '/payment/vnpay/status/{orderCode}': {
+      get: {
+        ...operation('Get VNPay status for Android polling', ['Payments'], { '200': successResponse(), '404': errorResponse('Order not found') }),
+        parameters: [idParameter('orderCode', 'FoodHub order code', 'string')]
+      }
     },
     '/payment/{orderId}': {
       get: {
