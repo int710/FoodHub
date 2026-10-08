@@ -141,6 +141,9 @@ export const openApiDocument: OpenAPIV3.Document = {
         requestBody: jsonBody({ $ref: '#/components/schemas/ResetPasswordRequest' })
       }
     },
+    '/table': {
+      get: operation('List restaurant tables with availability', ['Tables'], { '200': successResponse('Tables with AVAILABLE, OCCUPIED or INACTIVE status') })
+    },
     '/table/{id}': {
       get: {
         ...operation('Get table detail', ['Tables'], { '200': successResponse(), '404': errorResponse('Table not found') }),
