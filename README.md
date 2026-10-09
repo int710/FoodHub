@@ -168,7 +168,8 @@ Email và Cloudflare R2 cần thêm các biến tương ứng được sử dụ
 - Guest đã quét trước đó có thể theo dõi order realtime.
 - Khách mới không được join bàn khi bàn đang có order thuộc trạng thái sử dụng.
 - Sau khi order cũ được quán xác nhận, bàn có thể đặt order bổ sung bằng cart chung.
-- Theo implementation hiện tại, `scanQR()` cũng trả bàn đang occupied nếu còn order ở `CANCELLED` hoặc `PAYMENT_FAILED`; cần xử lý/đóng vòng đời bàn trước khi cho khách mới scan lại.
+- `PENDING_PAYMENT` còn hạn, `PENDING_CONFIRMATION`, `CONFIRMED`, `PREPARING`, `READY` và `SERVED` chiếm bàn.
+- `COMPLETED`, `CANCELLED`, `PAYMENT_FAILED` không chiếm bàn. Khi bàn không còn đơn hoạt động, cart và các table session Redis được tự động dọn.
 
 ### Quét QR
 
@@ -267,6 +268,7 @@ QR table được ưu tiên cho `DINE_IN`; không dùng user token để thay th
 | PATCH | `/order/:id/confirm` | Admin/Staff |
 | PATCH | `/order/:id/reject` | Admin/Staff |
 | PATCH | `/order/:id/serve` | Admin/Staff |
+| PATCH | `/order/:id/complete` | Admin/Staff |
 | PATCH | `/order/:id/cancel` | Login |
 
 Order status chính:
@@ -278,7 +280,7 @@ PENDING_PAYMENT -> PENDING_CONFIRMATION -> CONFIRMED -> PREPARING
 
 Nhánh lỗi/hủy: `PAYMENT_FAILED`, `CANCELLED`.
 
-`COMPLETED` đã có trong domain order nhưng hiện chưa có endpoint riêng để chuyển trực tiếp từ `SERVED` sang `COMPLETED`.
+Chỉ đơn đã `SERVED` và đã thanh toán mới được chuyển sang `COMPLETED`. Với đơn tại bàn, thao tác này giải phóng bàn và dọn dữ liệu tạm Redis nếu không còn đơn hoạt động khác.
 
 ### Payment
 

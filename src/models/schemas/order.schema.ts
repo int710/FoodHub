@@ -99,6 +99,11 @@ export const serveOrderSchema = z.object({
   body: z.object({}).strict()
 })
 
+export const completeOrderSchema = z.object({
+  params: orderIdParamsSchema,
+  body: z.object({}).strict()
+})
+
 export const updateKitchenItemStatusSchema = z.object({
   params: orderItemIdParamsSchema,
   body: z.object({

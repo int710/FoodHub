@@ -9,6 +9,7 @@ import { kitchenOrdersQuerySchema, orderHistoryQuerySchema } from '~/models/sche
 import { requestHandler } from '~/utils/requestHandler'
 import {
     cancelOrderSchema,
+    completeOrderSchema,
     confirmOrderSchema,
     rejectOrderSchema,
     serveOrderSchema,
@@ -31,6 +32,8 @@ ordersRouter.patch('/:id/confirm', authenticate, requireRole(Role.STAFF, Role.AD
 ordersRouter.patch('/:id/reject', authenticate, requireRole(Role.STAFF, Role.ADMIN), validate(rejectOrderSchema), requestHandler(ordersController.reject))
 
 ordersRouter.patch('/:id/serve', authenticate, requireRole(Role.STAFF, Role.ADMIN), validate(serveOrderSchema), requestHandler(ordersController.serve))
+
+ordersRouter.patch('/:id/complete', authenticate, requireRole(Role.STAFF, Role.ADMIN), validate(completeOrderSchema), requestHandler(ordersController.complete))
 
 ordersRouter.patch('/:id/cancel', authenticate, validate(cancelOrderSchema), requestHandler(ordersController.cancel))
 

@@ -73,6 +73,10 @@ class RedisClient {
     return this.client.sadd(key, ...members)
   }
 
+  async smembers(key: string): Promise<string[]> {
+    return this.client.smembers(key)
+  }
+
   async del(...keys: string[]): Promise<number> {
     return this.client.del(...keys)
   }

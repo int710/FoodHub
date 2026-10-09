@@ -9,7 +9,8 @@ import { ErrorWithStatus } from '~/models/Errors'
 import { TableReqBody } from '~/models/schemas/table.schema'
 import { signToken } from '~/utils/jwt'
 import { generateQR } from '~/utils/QRCode'
-import { expireStalePaymentOrders, occupyingOrderWhere } from '~/services/order-expiration.services'
+import { expireStalePaymentOrders } from '~/services/order-expiration.services'
+import { occupyingOrderWhere } from '~/services/table-runtime.services'
 
 class TableServices {
   async getAllTables() {
@@ -177,7 +178,11 @@ class TableServices {
         options: { expiresIn: '8h' }
       }),
       redis.set(RedisKey.tableSession(sessionId), table.id, TABLE_SESSION_TTL),
-      redis.sadd(RedisKey.tableSessions(table.id), sessionId)
+      (async () => {
+        const sessionsKey = RedisKey.tableSessions(table.id)
+        await redis.sadd(sessionsKey, sessionId)
+        await redis.expire(sessionsKey, TABLE_SESSION_TTL)
+      })()
     ])
 
     if (!activeOrder && needNewHost) {

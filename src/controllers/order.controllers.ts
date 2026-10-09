@@ -12,6 +12,7 @@ import { orderHistoryQuerySchema } from '~/models/schemas/order.schema'
 import { ParamsDictionary } from 'express-serve-static-core'
 import {
   cancelOrderSchema,
+  completeOrderSchema,
   confirmOrderSchema,
   rejectOrderSchema,
   serveOrderSchema,
@@ -550,6 +551,18 @@ export const ordersController = {
     const order = await ordersServices.serveOrder(params.id)
 
     return res.json(ApiResponse('Đã phục vụ đơn hàng', order))
+  },
+
+  async complete(req: Request, res: Response) {
+    const user = req.decoded_authorization!
+    const { params } = completeOrderSchema.parse({
+      params: req.params,
+      body: req.body
+    })
+
+    const order = await ordersServices.completeOrder(params.id, user.user_id, user.role as Role)
+
+    return res.json(ApiResponse('Đã hoàn tất đơn hàng', order))
   },
 
   async cancel(req: Request, res: Response) {

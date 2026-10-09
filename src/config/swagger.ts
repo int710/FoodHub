@@ -347,6 +347,13 @@ export const openApiDocument: OpenAPIV3.Document = {
         requestBody: jsonBody({ type: 'object', additionalProperties: false })
       }
     },
+    '/order/{id}/complete': {
+      patch: {
+        ...operation('Complete a served and paid order', ['Orders'], { '200': successResponse(), '400': errorResponse('Order is not served'), '401': errorResponse('Authentication required'), '403': errorResponse('Staff or admin role required'), '409': errorResponse('Order is not paid') }, bearer),
+        parameters: [idParameter('id', 'Order ID')],
+        requestBody: jsonBody({ type: 'object', additionalProperties: false })
+      }
+    },
     '/order/{id}/cancel': {
       patch: {
         ...operation('Cancel an order', ['Orders'], { '200': successResponse(), '400': errorResponse('Order cannot be cancelled'), '401': errorResponse('Authentication required'), '403': errorResponse('Access denied'), '409': errorResponse('Paid orders require refund first') }, bearer),

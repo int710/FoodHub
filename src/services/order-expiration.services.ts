@@ -1,8 +1,11 @@
 import { prisma } from '~/config/prisma'
 import { OrderStatus, PaymentMethod, PaymentStatus } from '~/generated/prisma/enums'
 import { reconcileZaloPayment } from '~/services/zalopay-payment-state.services'
-
-const ONLINE_PAYMENT_TIMEOUT_MS = 15 * 60 * 1000
+import {
+  clearTableRuntimeDataIfAvailable,
+  occupyingOrderWhere,
+  ONLINE_PAYMENT_TIMEOUT_MS
+} from '~/services/table-runtime.services'
 
 /**
  * Chuyển các giao dịch online quá hạn sang trạng thái kết thúc. Một job nền sẽ
@@ -36,7 +39,7 @@ export async function expireStalePaymentOrders(orderId?: string) {
     })
   }
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const expired = await tx.order.findMany({
       where: {
         ...(orderId ? { id: orderId } : {}),
@@ -49,7 +52,7 @@ export async function expireStalePaymentOrders(orderId?: string) {
           { expireAt: null, createdAt: { lte: legacyCutoff } }
         ]
       },
-      select: { id: true }
+      select: { id: true, tableId: true }
     })
 
     const ids = expired.map((order) => order.id)
@@ -64,32 +67,15 @@ export async function expireStalePaymentOrders(orderId?: string) {
       })
     }
 
-    return ids.length
+    return {
+      count: ids.length,
+      tableIds: [...new Set(expired.map((order) => order.tableId).filter((tableId): tableId is string => Boolean(tableId)))]
+    }
   })
-}
 
-export function occupyingOrderWhere(now = new Date()) {
-  const legacyCutoff = new Date(now.getTime() - ONLINE_PAYMENT_TIMEOUT_MS)
-  return {
-    OR: [
-      {
-        status: {
-          in: [
-            OrderStatus.PENDING_CONFIRMATION,
-            OrderStatus.CONFIRMED,
-            OrderStatus.PREPARING,
-            OrderStatus.READY,
-            OrderStatus.SERVED
-          ]
-        }
-      },
-      {
-        status: OrderStatus.PENDING_PAYMENT,
-        OR: [
-          { expireAt: { gt: now } },
-          { expireAt: null, createdAt: { gt: legacyCutoff } }
-        ]
-      }
-    ]
+  for (const tableId of result.tableIds) {
+    await clearTableRuntimeDataIfAvailable(tableId, now)
   }
+
+  return result.count
 }

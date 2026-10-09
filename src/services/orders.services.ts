@@ -6,6 +6,10 @@ import { ErrorWithStatus } from '~/models/Errors'
 import { PaymentStatus } from '~/generated/prisma/enums'
 import { emitOrderStatusUpdate } from "~/socket/orders/order.emitter"
 import notificationsServices from "~/services/notifications.services"
+import {
+  clearTableRuntimeData,
+  occupyingOrderWhere
+} from '~/services/table-runtime.services'
 
 const orderDetailInclude = {
   table: {
@@ -217,6 +221,17 @@ class OrdersServices {
 
     const previousStatus = order.status
 
+    if (order.tableId) {
+      const otherActiveOrders = await prisma.order.count({
+        where: {
+          tableId: order.tableId,
+          id: { not: order.id },
+          ...occupyingOrderWhere()
+        }
+      })
+      if (otherActiveOrders === 0) await clearTableRuntimeData(order.tableId)
+    }
+
     const updatedOrder = await prisma.order.update({
       where: { id: orderId },
       data: {
@@ -414,6 +429,80 @@ class OrdersServices {
     return updatedOrder
   }
 
+  async completeOrder(orderId: string, staffId: string, actorRole: Role) {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        type: true,
+        status: true,
+        tableId: true,
+        payments: { select: { status: true } }
+      }
+    })
+
+    if (!order) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.NOT_FOUND,
+        message: 'Không tìm thấy đơn hàng'
+      })
+    }
+
+    if (order.status !== OrderStatus.SERVED) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.BAD_REQUEST,
+        message: 'Chỉ có thể hoàn tất đơn đã phục vụ'
+      })
+    }
+
+    if (!order.payments.some((payment) => payment.status === PaymentStatus.PAID)) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.CONFLICT,
+        message: 'Đơn chưa thanh toán, chưa thể hoàn tất'
+      })
+    }
+
+    if (order.tableId) {
+      const otherActiveOrders = await prisma.order.count({
+        where: {
+          tableId: order.tableId,
+          id: { not: order.id },
+          ...occupyingOrderWhere()
+        }
+      })
+      if (otherActiveOrders === 0) await clearTableRuntimeData(order.tableId)
+    }
+
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
+      data: { status: OrderStatus.COMPLETED },
+      include: orderDetailInclude
+    })
+
+    emitOrderStatusUpdate({
+      orderId: updatedOrder.id,
+      orderType: updatedOrder.type,
+      previousStatus: OrderStatus.SERVED,
+      status: updatedOrder.status,
+      updatedAt: updatedOrder.updatedAt.toISOString(),
+      updatedBy: {
+        userId: staffId,
+        role: actorRole
+      }
+    })
+
+    await notificationsServices.createOrderStatusNotification({
+      orderId: updatedOrder.id,
+      previousStatus: OrderStatus.SERVED,
+      status: updatedOrder.status,
+      actorRole
+    }).catch((error) => {
+      console.error('[Notification] Failed to create completion notification:', error)
+    })
+
+    return updatedOrder
+  }
+
   async cancelOrder(orderId: string, actorId: string, actorRole: Role, reason: string) {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
@@ -466,6 +555,17 @@ class OrdersServices {
     }
 
     const previousStatus = order.status
+
+    if (order.tableId) {
+      const otherActiveOrders = await prisma.order.count({
+        where: {
+          tableId: order.tableId,
+          id: { not: order.id },
+          ...occupyingOrderWhere()
+        }
+      })
+      if (otherActiveOrders === 0) await clearTableRuntimeData(order.tableId)
+    }
 
     const updatedOrder = await prisma.order.update({
       where: { id: orderId },
