@@ -108,6 +108,16 @@ VNPAY_RETURN_URL=http://localhost:4000/api/v1/payment/vnpay/return
 VNPAY_IPN_URL=http://localhost:4000/api/v1/payment/vnpay/ipn
 VNPAY_TEST_MODE=true
 VNPAY_HOST=https://sandbox.vnpayment.vn
+
+# ZaloPay Sandbox (không thay thế VNPay)
+ZALOPAY_APP_ID=2554
+ZALOPAY_KEY1=your_zalopay_key1
+ZALOPAY_KEY2=your_zalopay_key2
+ZALOPAY_CREATE_URL=https://sb-openapi.zalopay.vn/v2/create
+ZALOPAY_QUERY_URL=https://sb-openapi.zalopay.vn/v2/query
+ZALOPAY_CALLBACK_URL=https://your-domain.example/api/v1/payment/zalopay/callback
+ZALOPAY_REDIRECT_URL=https://your-domain.example/api/v1/payment/zalopay/return
+ZALOPAY_ANDROID_DEEP_LINK=foodhub://payment/result
 ANDROID_PAYMENT_DEEP_LINK=foodhub://payment/result
 
 SWAGGER_ENABLED=true

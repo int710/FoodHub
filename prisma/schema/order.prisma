@@ -33,6 +33,7 @@ enum ItemStatus {
 
 enum PaymentMethod {
   VNPAY
+  ZALOPAY
   MOMO
   CASH
 }
