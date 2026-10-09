@@ -21,7 +21,12 @@ import { emitOrderItemStatusUpdate, emitOrderStatusUpdate } from '~/socket/order
 import { TokenPayload } from '~/models/schemas/token.schema'
 import notificationsServices from '~/services/notifications.services'
 import { buildVnpayPaymentUrl, getClientIp, VNPAY_PAYMENT_TIMEOUT_MS } from '~/utils/vnpay-payment'
-import { expireStaleVnpayOrders } from '~/services/order-expiration.services'
+import { expireStalePaymentOrders } from '~/services/order-expiration.services'
+import {
+  createZaloPayOrder,
+  createZaloPayTransactionId,
+  ZALOPAY_PAYMENT_TIMEOUT_MS
+} from '~/services/zalopay.services'
 
 function mapOrderTypeToCartType(type: OrderType): CartType {
   if (type === OrderType.DINE_IN) return CartType.DINE_IN
@@ -93,6 +98,8 @@ export const ordersController = {
         ? (body.paymentMethod as PaymentMethod)
         : PaymentMethod.CASH
     const isVnpay = paymentMethod === PaymentMethod.VNPAY
+    const isZalopay = paymentMethod === PaymentMethod.ZALOPAY
+    const isOnlinePayment = isVnpay || isZalopay
 
     if (tableId) {
       const existTable = await prisma.table.findUnique({
@@ -109,7 +116,7 @@ export const ordersController = {
 
     // Render có thể sleep nên không dựa vào cron: dọn giao dịch hết hạn ngay
     // trước checkout, sau đó mới quyết định tiếp tục hay tạo đơn mới.
-    await expireStaleVnpayOrders()
+    await expireStalePaymentOrders()
     const ownerWhere: Prisma.OrderWhereInput = tableId
       ? { tableId }
       : orderContext.type === OrderType.TAKEAWAY
@@ -135,6 +142,9 @@ export const ordersController = {
       const pendingVnpay = existingOrder.payments.find(
         (payment) => payment.method === PaymentMethod.VNPAY && payment.status === PaymentStatus.PENDING
       )
+      const pendingZalopay = existingOrder.payments.find(
+        (payment) => payment.method === PaymentMethod.ZALOPAY && payment.status === PaymentStatus.PENDING
+      )
 
       if (isVnpay && pendingVnpay) {
         const expireAt = new Date(Date.now() + VNPAY_PAYMENT_TIMEOUT_MS)
@@ -155,8 +165,55 @@ export const ordersController = {
         }))
       }
 
-      // Người dùng chủ động đổi sang tiền mặt: kết thúc giao dịch VNPay cũ rồi
-      // tạo đơn CASH từ giỏ hiện tại, không để một bàn có hai đơn chờ thanh toán.
+      if (isZalopay && pendingZalopay) {
+        const storedGateway = pendingZalopay.gatewayData as Record<string, unknown>
+        let paymentUrl = typeof storedGateway.orderUrl === 'string' ? storedGateway.orderUrl : ''
+        let qrCode = typeof storedGateway.qrCode === 'string' ? storedGateway.qrCode : null
+        let gatewayData = storedGateway
+        let createdGatewayOrder = false
+        let expireAt = existingOrder.expireAt || new Date(Date.now() + ZALOPAY_PAYMENT_TIMEOUT_MS)
+
+        if (!paymentUrl) {
+          const zaloOrder = await createZaloPayOrder({
+            orderCode: existingOrder.orderCode,
+            amount: Number(existingOrder.totalAmount.toString()),
+            appUser: existingOrder.customerId || existingOrder.sessionId,
+            appTransId: pendingZalopay.txnRef || createZaloPayTransactionId(existingOrder.orderCode)
+          })
+          paymentUrl = zaloOrder.orderUrl
+          createdGatewayOrder = true
+          qrCode = zaloOrder.qrCode
+          gatewayData = {
+            provider: 'ZALOPAY',
+            orderUrl: zaloOrder.orderUrl,
+            qrCode: zaloOrder.qrCode,
+            zpTransToken: zaloOrder.zpTransToken,
+            orderToken: zaloOrder.orderToken,
+            createResponse: zaloOrder.raw
+          }
+          expireAt = new Date(Date.now() + ZALOPAY_PAYMENT_TIMEOUT_MS)
+          await prisma.payment.update({
+            where: { id: pendingZalopay.id },
+            data: { txnRef: zaloOrder.appTransId, gatewayData: gatewayData as Prisma.InputJsonValue }
+          })
+        }
+
+        if (!existingOrder.expireAt || createdGatewayOrder) {
+          await prisma.order.update({ where: { id: existingOrder.id }, data: { expireAt } })
+        }
+        return res.json(ApiResponse('Tiếp tục thanh toán đơn ZaloPay đang chờ', {
+          order: { ...existingOrder, expireAt },
+          paymentUrl,
+          orderUrl: paymentUrl,
+          qrCode,
+          orderCode: existingOrder.orderCode,
+          provider: PaymentMethod.ZALOPAY,
+          resumed: true
+        }))
+      }
+
+      // Người dùng đổi phương thức: kết thúc giao dịch online cũ rồi tạo đơn mới
+      // từ giỏ hiện tại, không để một bàn có hai giao dịch chờ song song.
       await prisma.$transaction([
         prisma.order.update({
           where: { id: existingOrder.id },
@@ -255,11 +312,12 @@ export const ordersController = {
     const vatAmount = Number((subtotal * 0.1).toFixed(2))
     const totalAmount = Number((subtotal + vatAmount).toFixed(2))
 
-    const orderStatus = isVnpay ? OrderStatus.PENDING_PAYMENT : OrderStatus.PENDING_CONFIRMATION
-    const paymentStatus = isVnpay ? PaymentStatus.PENDING : PaymentStatus.UNPAID
+    const orderStatus = isOnlinePayment ? OrderStatus.PENDING_PAYMENT : OrderStatus.PENDING_CONFIRMATION
+    const paymentStatus = isOnlinePayment ? PaymentStatus.PENDING : PaymentStatus.UNPAID
 
     const orderCode = `FHUB_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`
     const sessionId = resolveSessionId(req, orderContext.type, ownerId)
+    const zaloAppTransId = isZalopay ? createZaloPayTransactionId(orderCode) : undefined
 
     const createdOrder = await prisma.$transaction(async (tx) => {
       const order = await tx.order.create({
@@ -276,8 +334,9 @@ export const ordersController = {
           vatAmount: new Prisma.Decimal(vatAmount.toFixed(2)),
           totalAmount: new Prisma.Decimal(totalAmount.toFixed(2)),
           deliveryInfo: body.deliveryInfo ? (body.deliveryInfo as Prisma.InputJsonValue) : undefined,
-          // Thêm expire cho VNPay
-          ...(isVnpay ? { expireAt: new Date(Date.now() + VNPAY_PAYMENT_TIMEOUT_MS) } : {})
+          ...(isOnlinePayment
+            ? { expireAt: new Date(Date.now() + (isZalopay ? ZALOPAY_PAYMENT_TIMEOUT_MS : VNPAY_PAYMENT_TIMEOUT_MS)) }
+            : {})
         }
       })
 
@@ -291,6 +350,7 @@ export const ordersController = {
           method: paymentMethod,
           status: paymentStatus,
           amount: new Prisma.Decimal(totalAmount.toFixed(2)),
+          txnRef: zaloAppTransId,
           gatewayData: {}
         }
       })
@@ -310,6 +370,62 @@ export const ordersController = {
         paymentUrl,
         orderCode
       }))
+    }
+
+
+    if (isZalopay) {
+      try {
+        const zaloOrder = await createZaloPayOrder({
+          orderCode,
+          amount: totalAmount,
+          appUser: orderContext.user?.user_id || sessionId,
+          appTransId: zaloAppTransId,
+          items: orderItemsData.map((item) => ({
+            itemid: item.menuItemId,
+            itemname: (item.snapshot as { name: string }).name,
+            itemprice: Number(item.unitPrice.toString()),
+            itemquantity: item.quantity
+          }))
+        })
+        await prisma.payment.updateMany({
+          where: { orderId: createdOrder.id, method: PaymentMethod.ZALOPAY },
+          data: {
+            txnRef: zaloOrder.appTransId,
+            gatewayData: {
+              provider: 'ZALOPAY',
+              orderUrl: zaloOrder.orderUrl,
+              qrCode: zaloOrder.qrCode,
+              zpTransToken: zaloOrder.zpTransToken,
+              orderToken: zaloOrder.orderToken,
+              createResponse: zaloOrder.raw
+            } as Prisma.InputJsonValue
+          }
+        })
+
+        return res.json(ApiResponse('Tạo đơn hàng ZaloPay, vui lòng thanh toán', {
+          order: createdOrder,
+          paymentUrl: zaloOrder.orderUrl,
+          orderUrl: zaloOrder.orderUrl,
+          qrCode: zaloOrder.qrCode,
+          orderCode,
+          provider: PaymentMethod.ZALOPAY
+        }))
+      } catch (error) {
+        await prisma.$transaction([
+          prisma.order.update({ where: { id: createdOrder.id }, data: { status: OrderStatus.PAYMENT_FAILED } }),
+          prisma.payment.updateMany({
+            where: { orderId: createdOrder.id, method: PaymentMethod.ZALOPAY },
+            data: {
+              status: PaymentStatus.FAILED,
+              gatewayData: { createError: error instanceof Error ? error.message : 'Unknown error' }
+            }
+          })
+        ])
+        throw new ErrorWithStatus({
+          httpStatusCode: HTTP_STATUS.BAD_GATEWAY,
+          message: error instanceof Error ? error.message : 'Không thể kết nối ZaloPay'
+        })
+      }
     }
 
     // CASH: đơn đã được gửi quán nên giỏ mới được xóa.

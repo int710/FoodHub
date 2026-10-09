@@ -294,7 +294,7 @@ export const openApiDocument: OpenAPIV3.Document = {
     },
     '/order/{type}/new': {
       post: {
-        ...operation('Create an order', ['Orders'], { '200': successResponse('Order created; VNPay responses also contain paymentUrl'), '400': errorResponse('Invalid order context'), '401': errorResponse('Authentication or table token required'), '409': errorResponse('Table order is waiting for confirmation') }, bearerOrTableToken),
+        ...operation('Create an order', ['Orders'], { '200': successResponse('Order created; VNPay/ZaloPay responses also contain paymentUrl'), '400': errorResponse('Invalid order context'), '401': errorResponse('Authentication or table token required'), '409': errorResponse('Table order is waiting for confirmation') }, bearerOrTableToken),
         parameters: [{ $ref: '#/components/parameters/OrderType' }],
         requestBody: jsonBody({ $ref: '#/components/schemas/CreateOrderRequest' })
       }
@@ -370,6 +370,30 @@ export const openApiDocument: OpenAPIV3.Document = {
       get: {
         ...operation('Get VNPay status for Android polling', ['Payments'], { '200': successResponse(), '404': errorResponse('Order not found') }),
         parameters: [idParameter('orderCode', 'FoodHub order code', 'string')]
+      }
+    },
+    '/payment/zalopay/create': {
+      post: {
+        ...operation('Get or recreate a pending ZaloPay payment URL', ['Payments'], { '200': successResponse(), '400': errorResponse('Order cannot be paid with ZaloPay'), '404': errorResponse('Order not found'), '502': errorResponse('ZaloPay unavailable') }),
+        requestBody: jsonBody({ $ref: '#/components/schemas/CreatePaymentRequest' })
+      }
+    },
+    '/payment/zalopay/callback': {
+      post: operation('Handle and verify ZaloPay server callback', ['Payments'], { '200': { description: 'ZaloPay acknowledgement' } })
+    },
+    '/payment/zalopay/return': {
+      get: operation('Verify ZaloPay browser return and redirect to Android', ['Payments'], { '302': { description: 'Redirect to the configured Android payment deep link' } })
+    },
+    '/payment/zalopay/status/{orderCode}': {
+      get: {
+        ...operation('Query ZaloPay and return the final payment state', ['Payments'], { '200': successResponse(), '404': errorResponse('Order not found'), '502': errorResponse('ZaloPay unavailable') }),
+        parameters: [idParameter('orderCode', 'FoodHub order code', 'string')]
+      }
+    },
+    '/payment/{orderId}/zalopay/convert': {
+      patch: {
+        ...operation('Convert an unpaid CASH order to ZaloPay QR', ['Payments'], { '200': successResponse(), '400': errorResponse('Order cannot change payment method'), '401': errorResponse('Authentication required'), '403': errorResponse('Staff or admin role required'), '409': errorResponse('Payment is not CASH/UNPAID'), '502': errorResponse('ZaloPay unavailable') }, bearer),
+        parameters: [idParameter('orderId', 'Order ID')]
       }
     },
     '/payment/{orderId}': {
@@ -466,7 +490,7 @@ export const openApiDocument: OpenAPIV3.Document = {
       Role: { type: 'string', enum: ['ADMIN', 'STAFF', 'CUSTOMER'] },
       OrderType: { type: 'string', enum: ['DINE_IN', 'TAKEAWAY', 'DELIVERY'] },
       OrderStatus: { type: 'string', enum: ['PENDING_PAYMENT', 'PENDING_CONFIRMATION', 'CONFIRMED', 'PREPARING', 'READY', 'SERVED', 'COMPLETED', 'CANCELLED', 'PAYMENT_FAILED'] },
-      PaymentMethod: { type: 'string', enum: ['VNPAY', 'MOMO', 'CASH'] },
+      PaymentMethod: { type: 'string', enum: ['VNPAY', 'ZALOPAY', 'MOMO', 'CASH'] },
       NotificationType: { type: 'string', enum: ['ORDER_CREATED', 'ORDER_PAYMENT_SUCCESS', 'ORDER_PAYMENT_FAILED', 'ORDER_CONFIRMED', 'ORDER_REJECTED', 'ORDER_PREPARING', 'ORDER_READY', 'ORDER_SERVED', 'ORDER_COMPLETED', 'ORDER_CANCELLED', 'ORDER_PAYMENT_RECEIVED'] },
       RegisterRequest: {
         type: 'object', required: ['email', 'password', 'confirmPassword', 'name'],

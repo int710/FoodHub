@@ -9,11 +9,11 @@ import { ErrorWithStatus } from '~/models/Errors'
 import { TableReqBody } from '~/models/schemas/table.schema'
 import { signToken } from '~/utils/jwt'
 import { generateQR } from '~/utils/QRCode'
-import { expireStaleVnpayOrders, occupyingOrderWhere } from '~/services/order-expiration.services'
+import { expireStalePaymentOrders, occupyingOrderWhere } from '~/services/order-expiration.services'
 
 class TableServices {
   async getAllTables() {
-    await expireStaleVnpayOrders()
+    await expireStalePaymentOrders()
     const tables = await prisma.table.findMany({
       select: {
         id: true,
@@ -116,7 +116,7 @@ class TableServices {
   }
 
   async scanQR(qrToken: string) {
-    await expireStaleVnpayOrders()
+    await expireStalePaymentOrders()
     const table = await prisma.table.findUnique({
       where: { qrToken },
       include: {

@@ -19,7 +19,7 @@ import paymentServices from '~/services/payments.services'
 import notificationsServices from '~/services/notifications.services'
 import { emitOrderStatusUpdate } from '~/socket/orders/order.emitter'
 import { buildVnpayPaymentUrl, getClientIp, VNPAY_PAYMENT_TIMEOUT_MS } from '~/utils/vnpay-payment'
-import { expireStaleVnpayOrders } from '~/services/order-expiration.services'
+import { expireStalePaymentOrders } from '~/services/order-expiration.services'
 
 const mapOrderTypeToCartType = (type: OrderType): CartType => {
   if (type === OrderType.DINE_IN) return CartType.DINE_IN
@@ -66,7 +66,7 @@ const paymentController = {
       return res.status(404).json({ message: 'Không tìm thấy đơn' })
     }
 
-    await expireStaleVnpayOrders(order.id)
+    await expireStalePaymentOrders(order.id)
     order = await prisma.order.findUnique({
       where: { orderCode },
       include: { payments: true }
@@ -266,7 +266,7 @@ const paymentController = {
       select: { id: true }
     })
     if (!current) return res.status(404).json({ message: 'Không tìm thấy đơn hàng' })
-    await expireStaleVnpayOrders(current.id)
+    await expireStalePaymentOrders(current.id)
 
     const order = await prisma.order.findUnique({
       where: { orderCode: req.params.orderCode },
