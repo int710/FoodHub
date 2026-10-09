@@ -463,6 +463,13 @@ export const ordersController = {
     return res.json(ApiResponse('Lịch sử đơn hàng', result.orders, result.pagination))
   },
 
+  async tableHistory(req: Request, res: Response) {
+    const tableSession = req.decoded_tokenTableSession!
+    const { query } = orderHistoryQuerySchema.parse({ query: req.query })
+    const result = await ordersServices.getTableSessionHistory(tableSession.sessionId, query)
+    return res.json(ApiResponse('Lịch sử đơn hàng của phiên bàn', result.orders, result.pagination))
+  },
+
   async getKitchenOrders(req: Request, res: Response) {
     const { query } = kitchenOrdersQuerySchema.parse({
       query: req.query

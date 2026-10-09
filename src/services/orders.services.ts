@@ -80,6 +80,22 @@ class OrdersServices {
     }
   }
 
+  async getTableSessionHistory(sessionId: string, query: HistoryQuery) {
+    const { limit, page, from, status, to, type } = query
+    const skip = (page - 1) * limit
+    const where = {
+      sessionId,
+      ...(status ? { status } : {}),
+      ...(type ? { type } : {}),
+      ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {})
+    }
+    const [orders, total] = await prisma.$transaction([
+      prisma.order.findMany({ where, skip, take: limit, orderBy: { createdAt: 'desc' }, include: orderDetailInclude }),
+      prisma.order.count({ where })
+    ])
+    return { orders, pagination: { page, limit, total } }
+  }
+
   async getKitchenOrders(query: KitchenQuery) {
     const page = query.page
     const limit = query.limit

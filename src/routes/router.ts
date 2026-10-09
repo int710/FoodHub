@@ -8,6 +8,7 @@ import cartsRouter from './cart.routes'
 import paymentsRouter from './payment.routes'
 import reviewRouter from './review.routes'
 import notificationRouter from './notification.routes'
+import conversationRouter from './conversation.routes'
 
 const routerApp = Router()
 
@@ -20,5 +21,6 @@ routerApp.use('/cart', cartsRouter)
 routerApp.use('/payment', paymentsRouter)
 routerApp.use('/reviews', reviewRouter)
 routerApp.use('/notifications', notificationRouter)
+routerApp.use('/conversations', conversationRouter)
 
 export default routerApp

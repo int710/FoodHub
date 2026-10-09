@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { ordersController } from '~/controllers/order.controllers'
 import { Role } from '~/generated/prisma/enums'
-import { authenticate, optionalAuth } from '~/middlewares/auth.middlewares'
+import { authenticate, optionalAuth, tableSessionAuth } from '~/middlewares/auth.middlewares'
 import { checkOrderContext } from '~/middlewares/order.middlewares'
 import { requireRole } from '~/middlewares/rbac.middlewares'
 import { validate } from '~/middlewares/validate'
@@ -22,6 +22,7 @@ const ordersRouter = Router()
 ordersRouter.post('/:type/new', optionalAuth, checkOrderContext, requestHandler(ordersController.newOrder))
 
 ordersRouter.get('/history', authenticate, validate(orderHistoryQuerySchema), requestHandler(ordersController.history))
+ordersRouter.get('/table-history', tableSessionAuth, validate(orderHistoryQuerySchema), requestHandler(ordersController.tableHistory))
 
 ordersRouter.get('/kitchen', authenticate, requireRole(Role.STAFF, Role.ADMIN), validate(kitchenOrdersQuerySchema), requestHandler(ordersController.getKitchenOrders))
 
