@@ -17,6 +17,7 @@ const key1 = process.env.ZALOPAY_KEY1?.trim() || (testMode ? TRIAL_SANDBOX.key1 
 const key2 = process.env.ZALOPAY_KEY2?.trim() || (testMode ? TRIAL_SANDBOX.key2 : '')
 const createUrl = process.env.ZALOPAY_CREATE_URL?.trim() || (testMode ? SANDBOX_CREATE_URL : '')
 const queryUrl = process.env.ZALOPAY_QUERY_URL?.trim() || (testMode ? SANDBOX_QUERY_URL : '')
+const configuredPaymentMethod = process.env.ZALOPAY_PREFERRED_PAYMENT_METHOD?.trim().toLowerCase() || 'auto'
 
 if (!appId || !key1 || !key2 || !createUrl || !queryUrl) {
   throw new Error('ZALOPAY_APP_ID, ZALOPAY_KEY1, ZALOPAY_KEY2, ZALOPAY_CREATE_URL and ZALOPAY_QUERY_URL are required')
@@ -29,6 +30,17 @@ if (!testMode && appId === TRIAL_SANDBOX.appId) {
 if (testMode && (createUrl !== SANDBOX_CREATE_URL || queryUrl !== SANDBOX_QUERY_URL)) {
   throw new Error('ZaloPay sandbox mode must use the official sandbox endpoints')
 }
+if (!['auto', 'vietqr', 'zalopay_wallet', 'all'].includes(configuredPaymentMethod)) {
+  throw new Error('ZALOPAY_PREFERRED_PAYMENT_METHOD must be auto, vietqr, zalopay_wallet or all')
+}
+
+// AppID dùng thử 2554 không được cấp QR đa năng và không trả qr_code. Ép
+// `vietqr` sẽ dẫn tới trang "phương thức thanh toán không khả dụng".
+const preferredPaymentMethod = configuredPaymentMethod === 'auto'
+  ? appId === TRIAL_SANDBOX.appId
+    ? 'zalopay_wallet'
+    : 'vietqr'
+  : configuredPaymentMethod
 
 export const zalopayConfig = {
   appId,
@@ -36,5 +48,6 @@ export const zalopayConfig = {
   key2,
   createUrl,
   queryUrl,
-  testMode
+  testMode,
+  preferredPaymentMethod
 } as const

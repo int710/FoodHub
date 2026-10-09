@@ -8,6 +8,7 @@ import { ErrorWithStatus } from '~/models/Errors'
 import {
   createZaloPayOrder,
   createZaloPayTransactionId,
+  isCurrentZaloPaymentMode,
   verifyZaloPayCallback,
   verifyZaloPayRedirect,
   ZALOPAY_PAYMENT_TIMEOUT_MS
@@ -64,7 +65,7 @@ const zalopayController = {
 
     const gateway = asGatewayObject(payment.gatewayData)
     const storedUrl = typeof gateway.orderUrl === 'string' ? gateway.orderUrl : null
-    if (storedUrl) {
+    if (storedUrl && isCurrentZaloPaymentMode(gateway)) {
       return res.json(ApiResponse('URL ZaloPay hiện tại', {
         orderCode,
         paymentUrl: storedUrl,
@@ -78,7 +79,9 @@ const zalopayController = {
       orderCode,
       amount: Number(order.totalAmount.toString()),
       appUser: order.customerId || order.sessionId,
-      appTransId: payment.txnRef || createZaloPayTransactionId(orderCode)
+      appTransId: storedUrl
+        ? createZaloPayTransactionId(`${orderCode}${Date.now().toString().slice(-6)}`)
+        : payment.txnRef || createZaloPayTransactionId(orderCode)
     })
     const expireAt = new Date(Date.now() + ZALOPAY_PAYMENT_TIMEOUT_MS)
     await prisma.$transaction([
@@ -93,6 +96,7 @@ const zalopayController = {
             qrCode: result.qrCode,
             zpTransToken: result.zpTransToken,
             orderToken: result.orderToken,
+            preferredPaymentMethod: result.preferredPaymentMethod,
             createResponse: result.raw
           } as Prisma.InputJsonValue
         }
@@ -247,6 +251,7 @@ const zalopayController = {
         qrCode: result.qrCode,
         zpTransToken: result.zpTransToken,
         orderToken: result.orderToken,
+        preferredPaymentMethod: result.preferredPaymentMethod,
         createResponse: result.raw
       }
       await prisma.payment.update({

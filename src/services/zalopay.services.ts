@@ -17,6 +17,7 @@ export type ZaloPayCreateResult = {
   qrCode: string | null
   zpTransToken: string | null
   orderToken: string | null
+  preferredPaymentMethod: string
   raw: Record<string, unknown>
 }
 
@@ -92,9 +93,10 @@ export async function createZaloPayOrder(input: ZaloPayCreateInput): Promise<Zal
   const appTransId = input.appTransId || createZaloPayTransactionId(input.orderCode)
   const appTime = Date.now()
   const amount = Math.round(input.amount)
+  const preferredPaymentMethod = zalopayConfig.preferredPaymentMethod
   const embedData = JSON.stringify({
     redirecturl: redirectUrl,
-    preferred_payment_method: ['vietqr'],
+    preferred_payment_method: preferredPaymentMethod === 'all' ? [] : [preferredPaymentMethod],
     merchantinfo: input.orderCode
   })
   const item = JSON.stringify(input.items || [])
@@ -132,8 +134,13 @@ export async function createZaloPayOrder(input: ZaloPayCreateInput): Promise<Zal
     qrCode: typeof raw.qr_code === 'string' ? raw.qr_code : null,
     zpTransToken: typeof raw.zp_trans_token === 'string' ? raw.zp_trans_token : null,
     orderToken: typeof raw.order_token === 'string' ? raw.order_token : null,
+    preferredPaymentMethod,
     raw
   }
+}
+
+export function isCurrentZaloPaymentMode(gatewayData: Record<string, unknown>) {
+  return gatewayData.preferredPaymentMethod === zalopayConfig.preferredPaymentMethod
 }
 
 export async function queryZaloPayOrder(appTransId: string): Promise<ZaloPayQueryResult> {
