@@ -18,7 +18,7 @@ import {
   serveOrderSchema,
   updateKitchenItemStatusSchema
 } from '~/models/schemas/order.schema'
-import { emitOrderItemStatusUpdate, emitOrderStatusUpdate } from '~/socket/orders/order.emitter'
+import { emitNewOrder, emitOrderItemStatusUpdate, emitOrderStatusUpdate } from '~/socket/orders/order.emitter'
 import { TokenPayload } from '~/models/schemas/token.schema'
 import notificationsServices from '~/services/notifications.services'
 import { buildVnpayPaymentUrl, getClientIp, VNPAY_PAYMENT_TIMEOUT_MS } from '~/utils/vnpay-payment'
@@ -439,7 +439,13 @@ export const ordersController = {
     await notificationsServices.createOrderCreated(createdOrder.id).catch((error) => {
       console.error('[Notification] Failed to create new order notification:', error)
     })
-    // TODO: bắn socket cho quán: io.to(`restaurant`).emit('new-order', createdOrder)
+    emitNewOrder({
+      orderId: createdOrder.id,
+      orderCode: createdOrder.orderCode,
+      orderType: createdOrder.type,
+      status: createdOrder.status,
+      createdAt: createdOrder.createdAt.toISOString()
+    })
 
     return res.json(ApiResponse('Tạo đơn hàng tiền mặt thành công', {
       order: createdOrder,

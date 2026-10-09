@@ -19,6 +19,20 @@ export const emitOrderStatusUpdate = (payload: OrderStatusUpdatePayload): void =
   }
 };
 
+export const emitNewOrder = (payload: {
+  orderId: string
+  orderCode: string
+  orderType: string
+  status: string
+  createdAt: string
+}): void => {
+  try {
+    getSocketIO().to(ORDER_ROOMS.HOST_ORDERS).emit(ORDER_SOCKET_EVENTS.NEW, payload)
+  } catch (error) {
+    console.error('[Socket Emitter Error] Failed to emit new order:', error)
+  }
+}
+
 export const emitOrderItemStatusUpdate = (payload: OrderItemStatusUpdatePayload): void => {
   try {
     emitToOrderRooms(ORDER_SOCKET_EVENTS.ITEM_UPDATE, payload, payload.orderId);
