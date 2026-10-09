@@ -25,6 +25,7 @@ import { expireStalePaymentOrders } from '~/services/order-expiration.services'
 import {
   createZaloPayOrder,
   createZaloPayTransactionId,
+  isCurrentZaloPaymentMode,
   ZALOPAY_PAYMENT_TIMEOUT_MS
 } from '~/services/zalopay.services'
 
@@ -173,12 +174,14 @@ export const ordersController = {
         let createdGatewayOrder = false
         let expireAt = existingOrder.expireAt || new Date(Date.now() + ZALOPAY_PAYMENT_TIMEOUT_MS)
 
-        if (!paymentUrl) {
+        if (!paymentUrl || !isCurrentZaloPaymentMode(storedGateway)) {
           const zaloOrder = await createZaloPayOrder({
             orderCode: existingOrder.orderCode,
             amount: Number(existingOrder.totalAmount.toString()),
             appUser: existingOrder.customerId || existingOrder.sessionId,
-            appTransId: pendingZalopay.txnRef || createZaloPayTransactionId(existingOrder.orderCode)
+            appTransId: paymentUrl
+              ? createZaloPayTransactionId(`${existingOrder.orderCode}${Date.now().toString().slice(-6)}`)
+              : pendingZalopay.txnRef || createZaloPayTransactionId(existingOrder.orderCode)
           })
           paymentUrl = zaloOrder.orderUrl
           createdGatewayOrder = true
@@ -189,6 +192,7 @@ export const ordersController = {
             qrCode: zaloOrder.qrCode,
             zpTransToken: zaloOrder.zpTransToken,
             orderToken: zaloOrder.orderToken,
+            preferredPaymentMethod: zaloOrder.preferredPaymentMethod,
             createResponse: zaloOrder.raw
           }
           expireAt = new Date(Date.now() + ZALOPAY_PAYMENT_TIMEOUT_MS)
@@ -397,6 +401,7 @@ export const ordersController = {
               qrCode: zaloOrder.qrCode,
               zpTransToken: zaloOrder.zpTransToken,
               orderToken: zaloOrder.orderToken,
+              preferredPaymentMethod: zaloOrder.preferredPaymentMethod,
               createResponse: zaloOrder.raw
             } as Prisma.InputJsonValue
           }

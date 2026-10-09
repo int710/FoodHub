@@ -118,6 +118,8 @@ ZALOPAY_QUERY_URL=https://sb-openapi.zalopay.vn/v2/query
 ZALOPAY_CALLBACK_URL=https://your-domain.example/api/v1/payment/zalopay/callback
 ZALOPAY_REDIRECT_URL=https://your-domain.example/api/v1/payment/zalopay/return
 ZALOPAY_ANDROID_DEEP_LINK=foodhub://payment/result
+# auto: AppID thử nghiệm 2554 dùng zalopay_wallet; merchant riêng dùng vietqr
+ZALOPAY_PREFERRED_PAYMENT_METHOD=auto
 ANDROID_PAYMENT_DEEP_LINK=foodhub://payment/result
 
 SWAGGER_ENABLED=true
