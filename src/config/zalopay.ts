@@ -34,11 +34,12 @@ if (!['auto', 'vietqr', 'zalopay_wallet', 'all'].includes(configuredPaymentMetho
   throw new Error('ZALOPAY_PREFERRED_PAYMENT_METHOD must be auto, vietqr, zalopay_wallet or all')
 }
 
-// AppID dùng thử 2554 không được cấp QR đa năng và không trả qr_code. Ép
-// `vietqr` sẽ dẫn tới trang "phương thức thanh toán không khả dụng".
+// AppID dùng thử 2554 không trả qr_code VietQR. Giữ danh sách phương thức
+// mặc định của cổng (all) để trang hosted tự hiển thị các lựa chọn khả dụng;
+// app vẫn có thể render QR Ví ZaloPay từ order_url cho thiết bị khác quét.
 const preferredPaymentMethod = configuredPaymentMethod === 'auto'
   ? appId === TRIAL_SANDBOX.appId
-    ? 'zalopay_wallet'
+    ? 'all'
     : 'vietqr'
   : configuredPaymentMethod
 
