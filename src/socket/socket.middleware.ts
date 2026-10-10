@@ -66,9 +66,9 @@ export const socketAuthMiddleware = async (socket: Socket, next: (err?: Error) =
 
     const token = userToken;
 
-    if (!token) {
-      throw new SocketAuthError("Authentication token is required", HTTP_STATUS.UNAUTHORIZED);
-    }
+    // Kết nối không token chỉ được nhận các sự kiện public (ví dụ menu:updated).
+    // Các handler chat/order chỉ được đăng ký khi socket.data.user tồn tại.
+    if (!token) return next();
     const secretKey = process.env.SECRET_ACCESS_TOKEN;
     if (!secretKey) {
       throw new Error("SECRET_ACCESS_TOKEN is not defined in environment variables");

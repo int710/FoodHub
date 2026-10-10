@@ -15,6 +15,12 @@ const source = fs.readFileSync(path.join(__dirname, 'template-email.html'), 'utf
 const template = Handlebars.compile(source)
 
 const resend = new Resend(process.env.ResendAPIKey)
+const appDeepLink = (host: string, token: string) => {
+  const scheme = (process.env.ANDROID_APP_DEEP_LINK || 'foodhub').trim()
+    .replace(/:\/\/.*$/, '')
+    .replace(/:$/, '')
+  return `${scheme}://${host}?token=${encodeURIComponent(token)}`
+}
 const sendEmail = async ({ to, subject, html }: sendMailType) => {
   const { data, error } = await resend.emails.send({
     from: process.env.From_Send_Email as string,
@@ -34,7 +40,7 @@ export const sendVerifyEmail = ({ to, name, verifyToken }: { to: string; name: s
     title: 'Xác thực tài khoản FoodHub',
     content: `Chào ${name}, chúc mừng bạn đã đăng ký tài khoản thành công, vui lòng bấm vào link để tiến hành xác thực tài khoản !`,
     button_text: 'Xác thực ngay',
-    button_url: `https://localhost:3000/verify?token=${verifyToken}`
+    button_url: appDeepLink('verify', verifyToken)
   })
   const subject = 'Verify email account'
   return sendEmail({ to, subject, html })
@@ -53,7 +59,7 @@ export const sendEmailForgotPassword = ({
     title: 'Khôi phục mật khẩu tài khoản FoodHub',
     content: `Xin chào ${name}, bạn vừa yêu cầu khôi phục mật khẩu tài khoản, vui lòng bấm vào link dưới đây để hoàn tất quá trình, liên kết chỉ hợp lệ trong vòng 12h tính từ thời điểm bạn nhận được email này !`,
     button_text: 'Khôi phục ngay',
-    button_url: `https://localhost:3000/forgot-password?token=${forgotPasswordToken}`
+    button_url: appDeepLink('reset-password', forgotPasswordToken)
   })
   const subject = 'Quên mật khẩu'
   return sendEmail({ to, subject, html })

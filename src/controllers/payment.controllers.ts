@@ -313,12 +313,13 @@ const paymentController = {
     const staffId = req.decoded_authorization?.user_id as string
 
     const data = await paymentServices.cashConfirm({ orderId, staffId })
-    await notificationsServices.createOrderStatusNotification({
-      orderId,
-      previousStatus: OrderStatus.PENDING_CONFIRMATION,
-      status: OrderStatus.CONFIRMED
-    }).catch((error) => {
-      console.error('[Notification] Failed to create cash confirmation notification:', error)
+    emitOrderStatusUpdate({
+      orderId: data.id,
+      orderType: data.type,
+      previousStatus: data.status,
+      status: data.status,
+      updatedAt: data.paidAt.toISOString(),
+      updatedBy: { userId: staffId, role: 'STAFF' }
     })
     return res.json(ApiResponse('Xác nhận thanh toán thành công', data))
   }

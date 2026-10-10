@@ -33,9 +33,6 @@ class MenuServices {
       orderBy: { sortOrder: 'asc' },
       include: {
         item: {
-          where: {
-            isAvailable: true
-          },
           orderBy: { sortOrder: 'asc' },
           select: {
             id: true,
@@ -44,6 +41,9 @@ class MenuServices {
             image: true,
             totalOrder: true,
             avgRating: true,
+            isAvailable: true,
+            isFeatured: true,
+            description: true,
             sortOrder: true,
             flashSale: {
               where: { isActive: true, startsAt: { lte: new Date() }, endsAt: { gte: new Date() } }
@@ -75,6 +75,9 @@ class MenuServices {
           image: item.image,
           totalOrder: item.totalOrder,
           avgRating: item.avgRating,
+          isAvailable: item.isAvailable,
+          isFeatured: item.isFeatured,
+          description: item.description,
           sortOrder: item.sortOrder
         }
       })
@@ -95,7 +98,7 @@ class MenuServices {
     const category = await prisma.menuCategory.create({
       data
     })
-    this.invalidateMenuCache()
+    await this.invalidateMenuCache()
 
     return category
   }
@@ -108,7 +111,7 @@ class MenuServices {
         message: MENU_MESSAGE.MENU_NOT_FOUND
       })
     }
-    this.invalidateMenuCache()
+    await this.invalidateMenuCache()
 
     return prisma.menuCategory.update({
       where: { id },
@@ -132,7 +135,7 @@ class MenuServices {
 
     await prisma.menuCategory.delete({ where: { id } })
 
-    this.invalidateMenuCache()
+    await this.invalidateMenuCache()
   }
 
   async createMenuItem(data: CreateMenuItemRequest) {
@@ -142,6 +145,7 @@ class MenuServices {
       throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.BAD_REQUEST, message: MENU_MESSAGE.CATEGORY_IS_INVALID })
     }
     const item = await prisma.menuItem.create({ data: data })
+    await this.invalidateMenuCache()
     return item
   }
 
@@ -151,7 +155,7 @@ class MenuServices {
       throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.NOT_FOUND, message: MENU_MESSAGE.ITEM_IS_INVALID })
     }
     const itemUpdate = await prisma.menuItem.update({ where: { id }, data })
-    this.invalidateItemCache(id)
+    await this.invalidateItemCache(id)
 
     return itemUpdate
   }
@@ -199,7 +203,7 @@ class MenuServices {
       data: { isAvailable: !item.isAvailable },
       select: { id: true, name: true, isAvailable: true }
     })
-    this.invalidateItemCache(id)
+    await this.invalidateItemCache(id)
 
     return itemAvailable
   }
@@ -211,6 +215,7 @@ class MenuServices {
 
     if (activeOrderCount > 0) {
       await prisma.menuItem.update({ where: { id }, data: { isAvailable: false } })
+      await this.invalidateItemCache(id)
       return {
         deleted: false,
         hidden: true,
@@ -219,7 +224,7 @@ class MenuServices {
     }
 
     await prisma.menuItem.delete({ where: { id } })
-    this.invalidateItemCache(id)
+    await this.invalidateItemCache(id)
 
     return { deleted: true, hidden: false, message: 'Đã xóa món ăn' }
   }
@@ -248,7 +253,7 @@ class MenuServices {
       include: { options: { orderBy: { sortOrder: 'asc' } } }
     })
 
-    this.invalidateItemCache(itemId)
+    await this.invalidateItemCache(itemId)
     return group
   }
 
@@ -328,13 +333,13 @@ class MenuServices {
       }
     })
 
-    this.invalidateItemCache(dto.itemId)
+    await this.invalidateItemCache(dto.itemId)
 
     return { ...sales, itemName: item.name, salePrice: Math.round(salePrice) }
   }
 
   async deleteFlashSale(itemId: string) {
-    this.invalidateItemCache(itemId)
+    await this.invalidateItemCache(itemId)
     await prisma.flashSale.delete({ where: { itemId } })
   }
 

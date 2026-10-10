@@ -10,6 +10,7 @@ import {
   UpdateMenuItemRequestBody
 } from '~/models/schemas/menu.schema'
 import { menusServices } from '~/services/menu.services'
+import { emitMenuUpdated } from '~/socket/menu.emitter'
 
 export const menusController = {
   async getPublicAll(req: Request, res: Response) {
@@ -24,26 +25,31 @@ export const menusController = {
 
   async createCategory(req: Request<ParamsDictionary, any, CategoryBody>, res: Response) {
     const result = await menusServices.createCategory(req.body)
+    emitMenuUpdated({ action: 'category' })
     return res.json(ApiResponse(MENU_MESSAGE.CREATE_CATEGORY_SUCCESS, result))
   },
 
   async updateCategory(req: Request<{ id: string }, any, CategoryBody>, res: Response) {
     const result = await menusServices.updateCategory(req.params.id, req.body)
+    emitMenuUpdated({ action: 'category' })
     return res.json(ApiResponse(MENU_MESSAGE.UPDATE_MENU_SUCCESS, result))
   },
 
   async deleteCategory(req: Request<{ id: string }>, res: Response) {
     await menusServices.deleteCategory(req.params.id)
+    emitMenuUpdated({ action: 'category' })
     return res.json(ApiResponse(MENU_MESSAGE.DELETE_CAT_SUCCESS, null))
   },
 
   async createMenuItem(req: Request<ParamsDictionary, any, CreateMenuItemRequest>, res: Response) {
     const result = await menusServices.createMenuItem(req.body)
+    emitMenuUpdated({ itemId: result.id, action: 'created' })
     return res.json(ApiResponse(MENU_MESSAGE.CREATE_MENU_ITEM_SUCCESS, result))
   },
 
   async updateMenuItem(req: Request<{ id: string }, any, UpdateMenuItemRequestBody>, res: Response) {
     const result = await menusServices.updateMenuItem(req.params.id, req.body)
+    emitMenuUpdated({ itemId: req.params.id, action: 'updated' })
     return res.json(ApiResponse(MENU_MESSAGE.UPDATE_ITEM_SUCCESS, result))
   },
 
@@ -55,12 +61,14 @@ export const menusController = {
 
   async toggleItem(req: Request<{ id: string }>, res: Response) {
     const result = await menusServices.toggleItem(req.params.id)
+    emitMenuUpdated({ itemId: req.params.id, action: 'availability' })
     const msg = result.isAvailable ? 'Sản phẩm đang hoạt động' : 'Sản phẩm đang được tạm dừng'
     return res.json(ApiResponse(msg, result))
   },
 
   async deleteItem(req: Request<{ id: string }>, res: Response) {
     const data = await menusServices.deleteItem(req.params.id)
+    emitMenuUpdated({ itemId: req.params.id, action: data.deleted ? 'deleted' : 'availability' })
     return res.json(ApiResponse(MENU_MESSAGE.DELETE_ITEM_SUCCESS, data))
   },
 
@@ -76,11 +84,13 @@ export const menusController = {
 
   async createFlashSale(req: Request<ParamsDictionary, any, CreateFlashSalesType>, res: Response) {
     const data = await menusServices.createFlashSales(req.decoded_authorization?.user_id as string, req.body)
+    emitMenuUpdated({ itemId: req.body.itemId, action: 'sale' })
     return res.json(ApiResponse(MENU_MESSAGE.CREATE_FLASHSALES_SUCCESS, data))
   },
 
   async deleteFlashSale(req: Request<{ itemId: string }>, res: Response) {
     await menusServices.deleteFlashSale(req.params.itemId)
+    emitMenuUpdated({ itemId: req.params.itemId, action: 'sale' })
     return res.json(ApiResponse(MENU_MESSAGE.DELETE_FLASHSALE_SUCCESS, null))
   },
 

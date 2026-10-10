@@ -1,4 +1,3 @@
-import { error } from "node:console"
 import { prisma } from "~/config/prisma"
 import HTTP_STATUS from "~/constants/httpStatus"
 import { OrderStatus, PaymentMethod, PaymentStatus } from "~/generated/prisma/enums"
@@ -35,19 +34,27 @@ class PaymentServices {
       })
     }
 
-    if (order.status !== OrderStatus.PENDING_CONFIRMATION) {
+    if (order.status !== OrderStatus.SERVED) {
       throw new ErrorWithStatus({
         httpStatusCode: HTTP_STATUS.BAD_REQUEST,
-        message: `Đơn đang ở trạng thái ${order.status}`
+        message: 'Chỉ xác nhận thu tiền mặt sau khi đơn đã được phục vụ'
+      })
+    }
+
+    if (orderPayment.status === PaymentStatus.PAID) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.BAD_REQUEST,
+        message: 'Đơn hàng đã được thanh toán'
       })
     }
 
     const paidAt = new Date()
 
     return prisma.$transaction(async (tx) => {
-      await tx.order.update({
+      const updatedOrder = await tx.order.update({
         where: { id: orderId },
-        data: { status: OrderStatus.CONFIRMED, paidAt, confirmedById: staffId }
+        data: { paidAt },
+        select: { id: true, type: true, status: true }
       })
 
       await tx.payment.update({
@@ -62,6 +69,7 @@ class PaymentServices {
           }
         }
       })
+      return { ...updatedOrder, paidAt }
     })
   }
 }
