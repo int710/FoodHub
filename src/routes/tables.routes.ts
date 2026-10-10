@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import {
   createTableController,
+  deleteTableController,
   getAllTablesController,
   getQRController,
   getTableByIdController,
@@ -20,6 +21,7 @@ tablesRouter.post('/new', authenticate, requireRole('ADMIN'), requestHandler(cre
 tablesRouter.get('/:id/qr', authenticate, requireRole('ADMIN'), requestHandler(getQRController))
 tablesRouter.post('/:id/regenerate-qr', authenticate, requireRole('ADMIN'), requestHandler(regenerateQRController))
 tablesRouter.patch('/:id/toggle', authenticate, requireRole('ADMIN'), requestHandler(toggleController))
+tablesRouter.delete('/:id', authenticate, requireRole('ADMIN'), requestHandler(deleteTableController))
 tablesRouter.post('/scan', requestHandler(qrScanController))
 
 export default tablesRouter

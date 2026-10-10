@@ -10,7 +10,7 @@ import { TableReqBody } from '~/models/schemas/table.schema'
 import { signToken } from '~/utils/jwt'
 import { generateQR } from '~/utils/QRCode'
 import { expireStalePaymentOrders } from '~/services/order-expiration.services'
-import { occupyingOrderWhere } from '~/services/table-runtime.services'
+import { clearTableRuntimeData, occupyingOrderWhere } from '~/services/table-runtime.services'
 
 class TableServices {
   async getAllTables() {
@@ -114,6 +114,43 @@ class TableServices {
       data: { isActive: !table.isActive },
       select: { id: true, name: true, isActive: true }
     })
+  }
+
+  async deleteTable(id: string) {
+    await expireStalePaymentOrders()
+    const table = await prisma.table.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        orders: {
+          where: occupyingOrderWhere(),
+          select: { id: true },
+          take: 1
+        }
+      }
+    })
+
+    if (!table) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.NOT_FOUND,
+        message: TABLE_MESSAGE.TABLE_NOT_FOUND
+      })
+    }
+    if (table.orders.length > 0) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.CONFLICT,
+        message: TABLE_MESSAGE.TABLE_HAS_ACTIVE_ORDER
+      })
+    }
+
+    const deletedTable = await prisma.table.delete({
+      where: { id },
+      select: { id: true, name: true }
+    })
+    await clearTableRuntimeData(id)
+
+    return deletedTable
   }
 
   async scanQR(qrToken: string) {

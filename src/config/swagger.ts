@@ -148,6 +148,10 @@ export const openApiDocument: OpenAPIV3.Document = {
       get: {
         ...operation('Get table detail', ['Tables'], { '200': successResponse(), '404': errorResponse('Table not found') }),
         parameters: [idParameter('id', 'Table ID')]
+      },
+      delete: {
+        ...operation('Delete an available table', ['Tables'], { '200': successResponse(), '401': errorResponse('Authentication required'), '403': errorResponse('Admin role required'), '404': errorResponse('Table not found'), '409': errorResponse('Table has an active order') }, bearer),
+        parameters: [idParameter('id', 'Table ID')]
       }
     },
     '/table/new': {

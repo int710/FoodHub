@@ -43,6 +43,11 @@ export const toggleController = async (req: Request<{ id: string }>, res: Respon
   return res.json(ApiResponse(msg, result))
 }
 
+export const deleteTableController = async (req: Request<{ id: string }>, res: Response) => {
+  const result = await tableServices.deleteTable(req.params.id)
+  return res.json(ApiResponse(TABLE_MESSAGE.DELETE_TABLE_SUCCESS, result))
+}
+
 export const qrScanController = async (
   req: Request<ParamsDictionary, any, { qrToken: string }>,
   res: Response,

@@ -38,6 +38,8 @@ export const TABLE_MESSAGE = {
   GET_QRCODE_SUCCESS: 'Get QRCode success',
   REGENERATE_QRCODE_TABLE_SUCCESS: 'Regenerate QRCode table success',
   TOGGLE_TABLE_SUCCESS: 'Toggle success',
+  DELETE_TABLE_SUCCESS: 'Delete table success',
+  TABLE_HAS_ACTIVE_ORDER: 'Không thể xóa bàn đang có đơn hoạt động',
   QR_CODE_INVALID: 'QR Code invalid',
   SCAN_QRCODE_SUCCESS: 'Scan QRCode success'
 }
