@@ -28,7 +28,7 @@ export const notificationController = {
   },
 
   async markAsRead(req: Request, res: Response) {
-    const { id } = notificationIdParamsSchema.parse({ params: req.params })
+    const { id } = notificationIdParamsSchema.parse({ params: req.params }).params
     const notification = await notificationsServices.markAsRead(
       req.decoded_authorization!.user_id,
       id

@@ -23,19 +23,24 @@ class TableServices {
         floor: true,
         note: true,
         isActive: true,
+        qrToken: true,
         orders: {
           where: occupyingOrderWhere(),
-          select: { id: true, status: true },
+          select: { id: true, orderCode: true, status: true, totalAmount: true, createdAt: true },
           take: 1
         }
       },
       orderBy: [{ floor: 'asc' }, { name: 'asc' }]
     })
 
-    return tables.map(({ orders, ...table }) => ({
-      ...table,
-      status: !table.isActive ? 'INACTIVE' : orders.length > 0 ? 'OCCUPIED' : 'AVAILABLE'
-    }))
+    return tables.map(({ orders, ...table }) => {
+      const currentOrder = orders[0] || null
+      return {
+        ...table,
+        status: !table.isActive ? 'INACTIVE' : currentOrder ? 'OCCUPIED' : 'AVAILABLE',
+        currentOrder
+      }
+    })
   }
 
   async createNewTable(body: TableReqBody) {
@@ -74,13 +79,24 @@ class TableServices {
         note: true,
         qrToken: true,
         isActive: true,
-        createdAt: true
+        createdAt: true,
+        orders: {
+          where: occupyingOrderWhere(),
+          select: { id: true, orderCode: true, status: true, totalAmount: true, createdAt: true },
+          take: 1
+        }
       }
     })
     if (!table) {
       throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.NOT_FOUND, message: TABLE_MESSAGE.TABLE_NOT_FOUND })
     }
-    return table
+    const { orders, ...detail } = table
+    const currentOrder = orders[0] || null
+    return {
+      ...detail,
+      status: !detail.isActive ? 'INACTIVE' : currentOrder ? 'OCCUPIED' : 'AVAILABLE',
+      currentOrder
+    }
   }
 
   async getQR(id: string) {

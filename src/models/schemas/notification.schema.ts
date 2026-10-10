@@ -9,7 +9,9 @@ export const notificationQuerySchema = z.object({
 })
 
 export const notificationIdParamsSchema = z.object({
-  id: z.string().min(1, 'Notification ID không hợp lệ')
+  params: z.object({
+    id: z.string().min(1, 'Notification ID không hợp lệ')
+  })
 })
 
 export type NotificationQuery = z.infer<typeof notificationQuerySchema>['query']
