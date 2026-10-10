@@ -5,6 +5,11 @@ export enum ConversationStatus {
   CLOSED = 'CLOSED'
 }
 
+export enum ConversationOwnerType {
+  USER = 'USER',
+  TABLE_SESSION = 'TABLE_SESSION'
+}
+
 const conversationSchema = new Schema(
   {
     // Lưu ID dạng String để tương thích hoàn toàn với Prisma ID (UUID, CUID, Int...)
@@ -13,6 +18,18 @@ const conversationSchema = new Schema(
       required: true,
       index: true
     },
+
+    ownerType: {
+      type: String,
+      enum: Object.values(ConversationOwnerType),
+      default: ConversationOwnerType.USER,
+      index: true
+    },
+
+    // Chỉ có với chat bắt đầu từ QR. customerId là sessionId để khách ở hai
+    // lượt dùng cùng một bàn không bao giờ đọc được hội thoại của nhau.
+    tableId: { type: String, default: null, index: true },
+    sessionId: { type: String, default: null, index: true },
 
     status: {
       type: String,
@@ -53,11 +70,11 @@ const conversationSchema = new Schema(
 )
 
 // Compound Index: Tối ưu cho truy vấn hiển thị danh sách chat mới nhất theo Khách hàng / Host
-conversationSchema.index({ customerId: 1, lastMessageAt: -1 })
+conversationSchema.index({ ownerType: 1, customerId: 1, lastMessageAt: -1 })
 conversationSchema.index({ assignedHostId: 1, status: 1, lastMessageAt: -1 })
 
 conversationSchema.index(
-  { customerId: 1 },
+  { ownerType: 1, customerId: 1 },
   {
     unique: true,
     partialFilterExpression: { status: ConversationStatus.OPEN }

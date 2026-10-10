@@ -1,18 +1,36 @@
-import { ConversationModel, ConversationStatus, IConversation } from "~/models/mongodb/conversation.model"
+import { ConversationModel, ConversationOwnerType, ConversationStatus, IConversation } from "~/models/mongodb/conversation.model"
 import { MessageModel } from "~/models/mongodb/message.model"
 
 export class ConversationServices {
-  static async getOrCreateForCustomer(customerId: string): Promise<{ conversation: IConversation, isNew: boolean }> {
+  static async getOrCreateForCustomer({ customerId, ownerType, tableId, sessionId }: {
+    customerId: string
+    ownerType: ConversationOwnerType
+    tableId?: string
+    sessionId?: string
+  }): Promise<{ conversation: IConversation, isNew: boolean }> {
     let conversation = await ConversationModel.findOne({
       customerId,
+      ownerType,
       status: ConversationStatus.OPEN
     })
+    // Hội thoại tài khoản từ phiên bản cũ chưa có ownerType. Chỉ nhận lại cho
+    // USER; chat bàn cũ tuyệt đối không được nối sang một phiên QR mới.
+    if (!conversation && ownerType === ConversationOwnerType.USER) {
+      conversation = await ConversationModel.findOneAndUpdate(
+        { customerId, ownerType: { $exists: false }, status: ConversationStatus.OPEN },
+        { $set: { ownerType: ConversationOwnerType.USER } },
+        { new: true }
+      )
+    }
     if (conversation) {
       return { conversation, isNew: false }
     }
 
     conversation = await ConversationModel.create({
       customerId,
+      ownerType,
+      tableId: tableId || null,
+      sessionId: sessionId || null,
       status: ConversationStatus.OPEN,
       assignedHostId: null,
       assignedAt: null,

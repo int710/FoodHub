@@ -4,7 +4,7 @@ import HTTP_STATUS from '~/constants/httpStatus'
 import { prisma } from '~/config/prisma'
 import { ApiResponse } from '~/models/ApiResponse'
 import { ErrorWithStatus } from '~/models/Errors'
-import { ConversationModel, ConversationStatus } from '~/models/mongodb/conversation.model'
+import { ConversationModel, ConversationOwnerType, ConversationStatus } from '~/models/mongodb/conversation.model'
 import { getSocketIO } from '~/socket/socket.instance'
 import { getConversationRoom, HOST_ROOM } from '~/socket/socket.room'
 
@@ -13,12 +13,23 @@ export const conversationController = {
     const conversations = await ConversationModel.find({ status: ConversationStatus.OPEN })
       .sort({ lastMessageAt: -1, updatedAt: -1 })
       .lean()
-    const ownerIds = conversations.map((conversation) => String(conversation.customerId))
+    const legacyIds = conversations
+      .filter((conversation) => !conversation.ownerType)
+      .map((conversation) => String(conversation.customerId))
+    const userIds = conversations
+      .filter((conversation) => conversation.ownerType === ConversationOwnerType.USER)
+      .map((conversation) => String(conversation.customerId))
+      .concat(legacyIds)
+    const tableIds = conversations
+      .filter((conversation) => conversation.ownerType === ConversationOwnerType.TABLE_SESSION)
+      .map((conversation) => String(conversation.tableId))
+      .filter(Boolean)
+      .concat(legacyIds)
     const [users, tables, orders] = await Promise.all([
-      prisma.user.findMany({ where: { id: { in: ownerIds } }, select: { id: true, name: true } }),
-      prisma.table.findMany({ where: { id: { in: ownerIds } }, select: { id: true, name: true, floor: true } }),
+      prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } }),
+      prisma.table.findMany({ where: { id: { in: tableIds } }, select: { id: true, name: true, floor: true } }),
       prisma.order.findMany({
-        where: { OR: [{ customerId: { in: ownerIds } }, { tableId: { in: ownerIds } }] },
+        where: { OR: [{ customerId: { in: userIds } }, { tableId: { in: tableIds } }] },
         select: { orderCode: true, customerId: true, tableId: true, createdAt: true },
         orderBy: { createdAt: 'desc' }
       })
@@ -32,10 +43,15 @@ export const conversationController = {
     })
     const data = conversations.map((conversation) => {
       const ownerId = String(conversation.customerId)
+      const isTable = conversation.ownerType === ConversationOwnerType.TABLE_SESSION ||
+        (!conversation.ownerType && tableNames.has(ownerId) && !userNames.has(ownerId))
+      const tableId = String(conversation.tableId || (isTable ? ownerId : ''))
       return {
         ...conversation,
-        customerName: userNames.get(ownerId) || tableNames.get(ownerId) || 'Khách tại bàn',
-        orderCode: latestOrderByOwner.get(ownerId) || null
+        customerName: isTable ? (tableNames.get(tableId) || 'Khách tại bàn') : (userNames.get(ownerId) || 'Khách hàng'),
+        conversationType: isTable ? 'TABLE' : 'USER',
+        contextLabel: isTable ? 'Phiên QR tại bàn' : 'Tài khoản khách hàng',
+        orderCode: latestOrderByOwner.get(isTable ? tableId : ownerId) || null
       }
     })
     return res.json(ApiResponse('Danh sách hội thoại', data))

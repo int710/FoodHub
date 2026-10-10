@@ -2,6 +2,9 @@ import { redis } from '~/config/redis'
 import { RedisKey } from '~/constants/redis'
 import { prisma } from '~/config/prisma'
 import { OrderStatus } from '~/generated/prisma/enums'
+import { ConversationModel, ConversationOwnerType, ConversationStatus } from '~/models/mongodb/conversation.model'
+import { getSocketIO } from '~/socket/socket.instance'
+import { getConversationRoom, HOST_ROOM } from '~/socket/socket.room'
 
 export const ONLINE_PAYMENT_TIMEOUT_MS = 15 * 60 * 1000
 
@@ -38,6 +41,31 @@ export function occupyingOrderWhere(now = new Date()) {
 export async function clearTableRuntimeData(tableId: string) {
   const sessionsKey = RedisKey.tableSessions(tableId)
   const sessionIds = await redis.smembers(sessionsKey)
+  const closedConversations = await ConversationModel.find({
+    status: ConversationStatus.OPEN,
+    $or: [
+      { ownerType: ConversationOwnerType.TABLE_SESSION, sessionId: { $in: sessionIds } },
+      // Dọn hội thoại bàn của bản cũ vốn dùng tableId làm customerId.
+      { ownerType: { $exists: false }, customerId: tableId }
+    ]
+  }).select({ _id: 1 }).lean()
+  if (closedConversations.length > 0) {
+    const ids = closedConversations.map(({ _id }) => _id)
+    await ConversationModel.updateMany(
+      { _id: { $in: ids } },
+      { $set: { status: ConversationStatus.CLOSED } }
+    )
+    try {
+      const io = getSocketIO()
+      ids.forEach((id) => {
+        const payload = { conversationId: String(id), status: ConversationStatus.CLOSED }
+        io.to(getConversationRoom(String(id))).emit('conversation:closed', payload)
+        io.to(HOST_ROOM).emit('conversation:updated', payload)
+      })
+    } catch {
+      // Cleanup chạy được cả trong worker không khởi tạo Socket.IO.
+    }
+  }
   const keys = [
     ...sessionIds.map(RedisKey.tableSession),
     sessionsKey,

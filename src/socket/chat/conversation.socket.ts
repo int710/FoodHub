@@ -1,7 +1,7 @@
 import { Server, Socket } from 'socket.io'
 
 import { getConversationRoom, HOST_ROOM } from '../socket.room'
-import { ConversationModel } from '~/models/mongodb/conversation.model'
+import { ConversationModel, ConversationOwnerType } from '~/models/mongodb/conversation.model'
 import { SenderRole } from '~/models/mongodb/message.model'
 import { ConversationServices } from '~/services/conversation.services'
 
@@ -39,11 +39,29 @@ export const registerConversationSocket = (io: Server, socket: Socket): void => 
         const isCustomer = userRoleLower === SenderRole.CUSTOMER
         const isHost = userRoleLower === SenderRole.STAFF || userRoleLower === SenderRole.ADMIN
         const customerOwnerId = user.authType === 'TABLE_GUEST'
-          ? user.tableId
+          ? user.sessionId
           : String(user.user_id)
+        const ownerType = user.authType === 'TABLE_GUEST'
+          ? ConversationOwnerType.TABLE_SESSION
+          : ConversationOwnerType.USER
+
+        // Nhận lại hội thoại tài khoản cũ. Không áp dụng cho QR để lượt khách
+        // sau tại cùng bàn không thể xem lịch sử của lượt trước.
+        if (
+          isCustomer &&
+          ownerType === ConversationOwnerType.USER &&
+          conversation.ownerType == null &&
+          conversation.customerId === customerOwnerId
+        ) {
+          conversation.ownerType = ConversationOwnerType.USER
+          await conversation.save()
+        }
 
         // Validate quyền truy cập của Customer
-        if (isCustomer && conversation.customerId !== customerOwnerId) {
+        if (isCustomer && (
+          conversation.customerId !== customerOwnerId ||
+          conversation.ownerType !== ownerType
+        )) {
           return callback?.({ success: false, message: 'Forbidden: Access denied' })
         }
 

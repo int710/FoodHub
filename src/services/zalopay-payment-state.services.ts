@@ -5,6 +5,7 @@ import cartsServices, { CartType } from '~/services/carts.services'
 import notificationsServices from '~/services/notifications.services'
 import { queryZaloPayOrder } from '~/services/zalopay.services'
 import { emitOrderStatusUpdate } from '~/socket/orders/order.emitter'
+import { clearTableRuntimeDataIfAvailable } from '~/services/table-runtime.services'
 
 export type ZaloPaymentRef = {
   id: string
@@ -46,8 +47,9 @@ export async function settleZaloPaymentSuccess(
   }
 
   const paidAt = new Date()
-  const nextOrderStatus =
-    order.status === OrderStatus.PENDING_PAYMENT || order.status === OrderStatus.PAYMENT_FAILED
+  const nextOrderStatus = order.status === OrderStatus.SERVED
+    ? OrderStatus.COMPLETED
+    : order.status === OrderStatus.PENDING_PAYMENT || order.status === OrderStatus.PAYMENT_FAILED
       ? OrderStatus.PENDING_CONFIRMATION
       : order.status
 
@@ -70,14 +72,17 @@ export async function settleZaloPaymentSuccess(
     })
   ])
 
+  // Luôn phát sự kiện để app admin/user tải lại cả payment status, kể cả khi
+  // đơn đã SERVED nên order status không thay đổi sau khi thanh toán.
+  emitOrderStatusUpdate({
+    orderId: order.id,
+    orderType: order.type,
+    previousStatus: order.status,
+    status: nextOrderStatus,
+    updatedAt: paidAt.toISOString()
+  })
+
   if (nextOrderStatus !== order.status) {
-    emitOrderStatusUpdate({
-      orderId: order.id,
-      orderType: order.type,
-      previousStatus: order.status,
-      status: nextOrderStatus,
-      updatedAt: paidAt.toISOString()
-    })
     await notificationsServices.createOrderStatusNotification({
       orderId: order.id,
       previousStatus: order.status,
@@ -91,6 +96,10 @@ export async function settleZaloPaymentSuccess(
   if (ownerId) {
     await cartsServices.clearCart(cartType(order.type), ownerId)
       .catch((error) => console.error('[ZaloPay] clear cart failed:', error))
+  }
+  if (nextOrderStatus === OrderStatus.COMPLETED && order.tableId) {
+    await clearTableRuntimeDataIfAvailable(order.tableId)
+      .catch((error) => console.error('[ZaloPay] clear table session failed:', error))
   }
   return { paidAt, orderStatus: nextOrderStatus, paymentStatus: PaymentStatus.PAID, restoredCash: false }
 }

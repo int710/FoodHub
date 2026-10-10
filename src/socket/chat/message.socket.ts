@@ -1,5 +1,5 @@
 import { Server, Socket } from "socket.io";
-import { ConversationModel, ConversationStatus } from "~/models/mongodb/conversation.model";
+import { ConversationModel, ConversationOwnerType, ConversationStatus } from "~/models/mongodb/conversation.model";
 import { MessageModel, MessageType, SenderRole } from "~/models/mongodb/message.model";
 
 import { getConversationRoom, HOST_ROOM } from "../socket.room";
@@ -34,8 +34,11 @@ export const registerMessageSocket = (io: Server, socket: Socket): void => {
       const isCustomer = userRoleLower === SenderRole.CUSTOMER
       const isHost = userRoleLower === SenderRole.STAFF || userRoleLower === SenderRole.ADMIN
       const customerOwnerId = user.authType === 'TABLE_GUEST'
-        ? user.tableId
+        ? user.sessionId
         : String(user.user_id)
+      const ownerType = user.authType === 'TABLE_GUEST'
+        ? ConversationOwnerType.TABLE_SESSION
+        : ConversationOwnerType.USER
 
       if (!isCustomer && !isHost) {
         return callback?.({ success: false, message: 'Forbidden' })
@@ -50,7 +53,10 @@ export const registerMessageSocket = (io: Server, socket: Socket): void => {
         if (!conversation || conversation.status === ConversationStatus.CLOSED) {
           return callback?.({ success: false, message: 'Conversation invalid or closed' })
         }
-        if (isCustomer && String(conversation.customerId) !== String(customerOwnerId)) {
+        if (isCustomer && (
+          String(conversation.customerId) !== String(customerOwnerId) ||
+          conversation.ownerType !== ownerType
+        )) {
           return callback?.({ success: false, message: 'Forbidden: Access denied' })
         }
       } else {
@@ -58,7 +64,15 @@ export const registerMessageSocket = (io: Server, socket: Socket): void => {
         if (!isCustomer) {
           return callback?.({ success: false, message: 'Host must provide conversationId' })
         }
-        const result = await ConversationServices.getOrCreateForCustomer(String(customerOwnerId))
+        if (!customerOwnerId) {
+          return callback?.({ success: false, message: 'Invalid chat identity' })
+        }
+        const result = await ConversationServices.getOrCreateForCustomer({
+          customerId: String(customerOwnerId),
+          ownerType,
+          tableId: user.tableId,
+          sessionId: user.sessionId
+        })
         conversation = result.conversation
         isNewConversation = result.isNew
       }

@@ -1,6 +1,6 @@
 import { Server, Socket } from "socket.io"
 import { getConversationRoom } from "../socket.room"
-import { ConversationModel } from "~/models/mongodb/conversation.model"
+import { ConversationModel, ConversationOwnerType } from "~/models/mongodb/conversation.model"
 
 interface TypingPayload {
   conversationId: string
@@ -11,10 +11,14 @@ const canAccessConversation = async (socket: Socket, conversationId: string) => 
   if (!user) return false
   if (user.role === 'STAFF' || user.role === 'ADMIN') return true
 
-  const ownerId = user.authType === 'TABLE_GUEST' ? user.tableId : user.user_id
+  const ownerId = user.authType === 'TABLE_GUEST' ? user.sessionId : user.user_id
+  const ownerType = user.authType === 'TABLE_GUEST'
+    ? ConversationOwnerType.TABLE_SESSION
+    : ConversationOwnerType.USER
   const conversation = await ConversationModel.findOne({
     _id: conversationId,
-    customerId: ownerId
+    customerId: ownerId,
+    ownerType
   }).select({ _id: 1 }).lean()
   return !!conversation
 }

@@ -203,8 +203,48 @@ const zalopayController = {
       throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.BAD_REQUEST, message: 'Đơn đã kết thúc, không thể đổi thanh toán' })
     }
 
-    const payment = order.payments[0]
-    if (!payment || payment.method !== PaymentMethod.CASH || payment.status !== PaymentStatus.UNPAID) {
+    let payment = order.payments[0]
+    if (payment?.method === PaymentMethod.ZALOPAY && payment.status === PaymentStatus.PENDING) {
+      const gateway = asGatewayObject(payment.gatewayData)
+      const storedUrl = typeof gateway.orderUrl === 'string' ? gateway.orderUrl : null
+
+      if (order.expireAt && order.expireAt <= new Date() && payment.txnRef) {
+        const reconciled = await reconcileZaloPayment(payment, order)
+        if (reconciled.paymentStatus === PaymentStatus.PAID) {
+          throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.CONFLICT, message: 'Đơn đã thanh toán ZaloPay' })
+        }
+        if (reconciled.restoredCash) {
+          payment = await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })
+        } else if (storedUrl) {
+          return res.json(ApiResponse('Mở lại QR ZaloPay đang chờ thanh toán', {
+            orderId: order.id,
+            orderCode: order.orderCode,
+            orderStatus: order.status,
+            paymentStatus: PaymentStatus.PENDING,
+            paymentUrl: storedUrl,
+            orderUrl: storedUrl,
+            qrCode: typeof gateway.qrCode === 'string' ? gateway.qrCode : null,
+            expireAt: order.expireAt
+          }))
+        }
+      } else if (storedUrl) {
+        return res.json(ApiResponse('Mở lại QR ZaloPay đang chờ thanh toán', {
+          orderId: order.id,
+          orderCode: order.orderCode,
+          orderStatus: order.status,
+          paymentStatus: PaymentStatus.PENDING,
+          paymentUrl: storedUrl,
+          orderUrl: storedUrl,
+          qrCode: typeof gateway.qrCode === 'string' ? gateway.qrCode : null,
+          expireAt: order.expireAt
+        }))
+      }
+    }
+    const canCreateZalo = payment && (
+      (payment.method === PaymentMethod.CASH && payment.status === PaymentStatus.UNPAID) ||
+      (payment.method === PaymentMethod.ZALOPAY && payment.status === PaymentStatus.PENDING)
+    )
+    if (!payment || !canCreateZalo) {
       throw new ErrorWithStatus({
         httpStatusCode: HTTP_STATUS.CONFLICT,
         message: 'Chỉ có thể chuyển đơn tiền mặt chưa thanh toán sang ZaloPay'
@@ -213,6 +253,7 @@ const zalopayController = {
 
     const appTransId = createZaloPayTransactionId(`${order.orderCode}${Date.now().toString().slice(-5)}`)
     const expireAt = new Date(Date.now() + ZALOPAY_PAYMENT_TIMEOUT_MS)
+    const previousGateway = asGatewayObject(payment.gatewayData)
     await prisma.$transaction([
       prisma.order.update({ where: { id: order.id }, data: { expireAt } }),
       prisma.payment.update({
@@ -222,6 +263,7 @@ const zalopayController = {
           status: PaymentStatus.PENDING,
           txnRef: appTransId,
           gatewayData: {
+            ...previousGateway,
             convertedFromCash: true,
             convertedById: req.decoded_authorization?.user_id,
             convertedAt: new Date().toISOString()
