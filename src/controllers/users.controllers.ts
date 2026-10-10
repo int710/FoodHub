@@ -12,6 +12,7 @@ import {
   RefreshTokenReq,
   RegisterRequestBody,
   ResetPasswordReq,
+  UpdateProfileRequestBody,
   VerifyEmailReq
 } from '~/models/schemas/users.schema'
 import userServices from '~/services/users.services'
@@ -66,6 +67,15 @@ export const getMeController = async (req: Request, res: Response, next: NextFun
   const { user_id } = req.decoded_authorization as TokenPayload
   const user = await userServices.getProfile(user_id)
   return res.json(ApiResponse(USER_MESSAGE.GET_MY_PROFILE_SUCCESS, user))
+}
+
+export const updateMeController = async (
+  req: Request<ParamsDictionary, any, UpdateProfileRequestBody>,
+  res: Response
+) => {
+  const { user_id } = req.decoded_authorization as TokenPayload
+  const user = await userServices.updateProfile(user_id, req.body)
+  return res.json(ApiResponse(USER_MESSAGE.UPDATE_PROFILE_SUCCESS, user))
 }
 
 export const verifyEmailController = async (

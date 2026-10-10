@@ -5,6 +5,7 @@ import { requestHandler } from '~/utils/requestHandler'
 
 const mediasRouter = Router()
 
-mediasRouter.post('/upload-image', requestHandler(mediasController.uploadImage))
+mediasRouter.get('/file/:fileName', requestHandler(mediasController.getImage))
+mediasRouter.post('/upload-image', authenticate, requestHandler(mediasController.uploadImage))
 
 export default mediasRouter

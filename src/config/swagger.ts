@@ -121,7 +121,11 @@ export const openApiDocument: OpenAPIV3.Document = {
       }
     },
     '/user/me': {
-      get: operation('Get current user profile', ['Users'], { '200': successResponse(), '401': errorResponse('Authentication required') }, bearer)
+      get: operation('Get current user profile', ['Users'], { '200': successResponse(), '401': errorResponse('Authentication required') }, bearer),
+      patch: {
+        ...operation('Update current user profile', ['Users'], { '200': successResponse(), '401': errorResponse('Authentication required'), '404': errorResponse('User not found'), '422': errorResponse('Validation error') }, bearer),
+        requestBody: jsonBody({ $ref: '#/components/schemas/UpdateProfileRequest' })
+      }
     },
     '/user/verify-email': {
       post: {
@@ -433,7 +437,7 @@ export const openApiDocument: OpenAPIV3.Document = {
     },
     '/media/upload-image': {
       post: {
-        ...operation('Upload images', ['Media'], { '200': successResponse(), '400': errorResponse('Invalid image upload') }),
+        ...operation('Upload images', ['Media'], { '200': successResponse(), '400': errorResponse('Invalid image upload'), '401': errorResponse('Authentication required') }, bearer),
         requestBody: {
           required: true,
           content: {
@@ -448,6 +452,12 @@ export const openApiDocument: OpenAPIV3.Document = {
             }
           }
         }
+      }
+    },
+    '/media/file/{fileName}': {
+      get: {
+        ...operation('Read a public uploaded image', ['Media'], { '200': { description: 'Image binary' }, '404': errorResponse('Image not found') }),
+        parameters: [idParameter('fileName', 'Uploaded image file name', 'string')]
       }
     },
     '/notifications': {
@@ -514,6 +524,7 @@ export const openApiDocument: OpenAPIV3.Document = {
       VerifyEmailRequest: { type: 'object', required: ['verify_email_token'], properties: { verify_email_token: { type: 'string', minLength: 1 } } },
       EmailRequest: { type: 'object', required: ['email'], properties: { email: { type: 'string', format: 'email' } } },
       ResetPasswordRequest: { type: 'object', required: ['forgot_password_token', 'new_password', 'confirmNewPassword'], properties: { forgot_password_token: { type: 'string' }, new_password: { type: 'string', format: 'password', minLength: 6, maxLength: 30 }, confirmNewPassword: { type: 'string', format: 'password' } } },
+      UpdateProfileRequest: { type: 'object', minProperties: 1, properties: { name: { type: 'string', minLength: 2, maxLength: 100 }, phone: { type: 'string', pattern: '^\\+?[0-9]{9,15}$', nullable: true }, dateOfBirth: { type: 'string', format: 'date', nullable: true }, avatar: { type: 'string', format: 'uri', maxLength: 2048, nullable: true } } },
       CreateTableRequest: { type: 'object', required: ['name'], properties: { name: { type: 'string', minLength: 1 }, capacity: { type: 'integer', minimum: 1, default: 2 }, floor: { type: 'string', nullable: true }, note: { type: 'string', nullable: true }, isActive: { type: 'boolean', default: true } } },
       ScanTableRequest: { type: 'object', required: ['qrToken'], properties: { qrToken: { type: 'string', minLength: 1 } } },
       CategoryRequest: { type: 'object', required: ['name', 'icon'], properties: { name: { type: 'string', minLength: 1 }, icon: { type: 'string', minLength: 1 }, sortOrder: { type: 'integer', default: 0 } } },

@@ -17,6 +17,7 @@ export const USER_MESSAGE = {
   ACCESS_TOKEN_IS_REQUIRED: 'Access token is required',
   USER_NOT_FOUND: 'User not found',
   GET_MY_PROFILE_SUCCESS: 'Get my profile success',
+  UPDATE_PROFILE_SUCCESS: 'Cập nhật thông tin tài khoản thành công',
   VERIFY_EMAIL_TOKEN_IS_REQUIRED: 'Verify email token is required',
   VERIFY_EMAIL_TOKEN_IS_INVALID: 'Verify email token is invalid',
   VERIFY_EMAIL_SUCCESS: 'Verify email success',

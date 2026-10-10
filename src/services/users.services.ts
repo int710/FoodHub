@@ -6,7 +6,7 @@ import HTTP_STATUS from '~/constants/httpStatus'
 import { USER_MESSAGE } from '~/constants/message'
 import { ErrorWithStatus } from '~/models/Errors'
 import { SignTokenPayload, TokenPayloadSchema } from '~/models/schemas/token.schema'
-import { RegisterRequestBody } from '~/models/schemas/users.schema'
+import { RegisterRequestBody, UpdateProfileRequestBody } from '~/models/schemas/users.schema'
 import { comparePassword, hashPassword } from '~/utils/crypto'
 import { signToken, verifyToken } from '~/utils/jwt'
 import { sendEmailForgotPassword, sendVerifyEmail } from '~/utils/send-email'
@@ -236,6 +236,31 @@ class UserServices {
       throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.NOT_FOUND, message: USER_MESSAGE.USER_NOT_FOUND })
     }
     return user
+  }
+
+  async updateProfile(userId: string, payload: UpdateProfileRequestBody) {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
+    if (!user) {
+      throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.NOT_FOUND, message: USER_MESSAGE.USER_NOT_FOUND })
+    }
+
+    return prisma.user.update({
+      where: { id: userId },
+      data: payload,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        phone: true,
+        avatar: true,
+        dateOfBirth: true,
+        isActive: true,
+        isVerified: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    })
   }
 
   async verifyEmail(verify_email_token: string) {

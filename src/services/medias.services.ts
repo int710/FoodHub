@@ -3,10 +3,15 @@ import sharp from 'sharp'
 import fs, { promises } from 'fs'
 import { Media, MediaType } from '~/constants/enums'
 import { handleUploadImage } from '~/utils/file'
-import { uploadFileToR2 } from '~/utils/r2'
+import { getImageFromR2, uploadFileToR2 } from '~/utils/r2'
 import mime from 'mime'
 
 class MediaServices {
+  async getImage(fileName: string) {
+    if (!/^[a-zA-Z0-9._-]+$/.test(fileName)) throw new Error('Invalid image name')
+    return getImageFromR2(fileName)
+  }
+
   async handleUploadImage(req: Request) {
     const files = await handleUploadImage(req)
     const result: Media[] = await Promise.all(

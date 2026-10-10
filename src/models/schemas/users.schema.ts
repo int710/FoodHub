@@ -77,3 +77,21 @@ const resetPasswordSchema = z
 
 export const resetPasswordReq = z.object({ body: resetPasswordSchema })
 export type ResetPasswordReq = z.infer<typeof resetPasswordSchema>
+
+export const updateProfileBodySchema = z
+  .object({
+    name: z.string().trim().min(2, 'Tên phải có ít nhất 2 kí tự').max(100, 'Tên không được dài quá 100 kí tự').optional(),
+    phone: z
+      .union([z.string().trim().regex(/^\+?[0-9]{9,15}$/, 'Số điện thoại không hợp lệ'), z.null()])
+      .optional(),
+    dateOfBirth: z.union([z.coerce.date({ error: 'Ngày sinh không đúng định dạng (YYYY-MM-DD)' }), z.null()]).optional(),
+    avatar: z.union([z.url('Đường dẫn ảnh đại diện không hợp lệ').max(2048), z.null()]).optional()
+  })
+  .refine((data) => Object.keys(data).length > 0, { error: 'Cần ít nhất một trường để cập nhật' })
+  .refine((data) => !data.dateOfBirth || data.dateOfBirth <= new Date(), {
+    error: 'Ngày sinh không thể nằm trong tương lai',
+    path: ['dateOfBirth']
+  })
+
+export const updateProfileReq = z.object({ body: updateProfileBodySchema })
+export type UpdateProfileRequestBody = z.infer<typeof updateProfileBodySchema>

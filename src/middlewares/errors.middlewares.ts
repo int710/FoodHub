@@ -10,8 +10,15 @@ export const defaultErrorHandler = (err: any, req: Request, res: Response, next:
   try {
     // Xử lý toàn bộ lỗi do mình đủ động ném ra (throw và lỗi 422)
     if (err instanceof ErrorWithStatus) {
-      const payload = err instanceof EntityError ? { errors: err.errors } : undefined
-      return res.status(err.httpStatusCode).json({ success: false, message: err.message, data: payload })
+      if (err instanceof EntityError) {
+        return res.status(err.httpStatusCode).json({
+          success: false,
+          message: err.message,
+          errors: err.errors,
+          data: { errors: err.errors }
+        })
+      }
+      return res.status(err.httpStatusCode).json({ success: false, message: err.message })
     }
 
     if (err instanceof TokenExpiredError) {
