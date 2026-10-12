@@ -29,6 +29,7 @@ import {
   isCurrentZaloPaymentMode,
   ZALOPAY_PAYMENT_TIMEOUT_MS
 } from '~/services/zalopay.services'
+import systemSettingsServices from '~/services/system-settings.services'
 
 function mapOrderTypeToCartType(type: OrderType): CartType {
   if (type === OrderType.DINE_IN) return CartType.DINE_IN
@@ -314,7 +315,8 @@ export const ordersController = {
       }
     })
 
-    const vatAmount = Number((subtotal * 0.1).toFixed(2))
+    const vatRate = await systemSettingsServices.getVatRate()
+    const vatAmount = Number((subtotal * vatRate).toFixed(2))
     const totalAmount = Number((subtotal + vatAmount).toFixed(2))
 
     const orderStatus = isOnlinePayment ? OrderStatus.PENDING_PAYMENT : OrderStatus.PENDING_CONFIRMATION

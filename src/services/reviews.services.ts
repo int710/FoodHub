@@ -2,7 +2,7 @@ import { prisma } from "~/config/prisma"
 import HTTP_STATUS from "~/constants/httpStatus"
 import { OrderStatus } from "~/generated/prisma/enums"
 import { ErrorWithStatus } from "~/models/Errors"
-import { CreateFeedbackDto } from "~/models/schemas/review.schema"
+import { AdminReviewQuery, CreateFeedbackDto } from "~/models/schemas/review.schema"
 
 class ReviewServices {
   async createFeedback({ customerId, dto }: { customerId: string, dto: CreateFeedbackDto }) {
@@ -63,6 +63,56 @@ class ReviewServices {
   async getAvg(menuItemId: string) {
     const agg = await prisma.review.aggregate({ where: { menuItemId }, _avg: { rating: true }, _count: true })
     return { avgRating: agg._avg.rating || 0, count: agg._count }
+  }
+
+  async listAll(query: AdminReviewQuery) {
+    const { page, limit, menuItemId, rating, search } = query
+    const where = {
+      ...(menuItemId && { menuItemId }),
+      ...(rating && { rating }),
+      ...(search && {
+        OR: [
+          { comment: { contains: search, mode: 'insensitive' as const } },
+          { customer: { name: { contains: search, mode: 'insensitive' as const } } },
+          { menuItem: { name: { contains: search, mode: 'insensitive' as const } } },
+          { order: { orderCode: { contains: search, mode: 'insensitive' as const } } }
+        ]
+      })
+    }
+    const [data, total, stats] = await Promise.all([
+      prisma.review.findMany({
+        where,
+        select: {
+          id: true,
+          rating: true,
+          comment: true,
+          images: true,
+          createdAt: true,
+          customer: { select: { id: true, name: true, avatar: true, email: true } },
+          menuItem: { select: { id: true, name: true, image: true, basePrice: true } },
+          order: { select: { id: true, orderCode: true, type: true, status: true, createdAt: true } }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit
+      }),
+      prisma.review.count({ where }),
+      prisma.review.aggregate({ where, _avg: { rating: true }, _count: true })
+    ])
+    return {
+      data,
+      total,
+      avgRating: stats._avg.rating || 0,
+      count: stats._count
+    }
+  }
+
+  async delete(id: string) {
+    const review = await prisma.review.findUnique({ where: { id }, select: { id: true } })
+    if (!review) {
+      throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.NOT_FOUND, message: 'Không tìm thấy đánh giá' })
+    }
+    await prisma.review.delete({ where: { id } })
   }
 }
 

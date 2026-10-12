@@ -1,0 +1,16 @@
+model SystemSetting {
+  id                 String   @id @default("default")
+  appName            String   @default("FoodHub") @map("app_name")
+  restaurantName     String   @default("FoodHub") @map("restaurant_name")
+  supportEmail       String?  @map("support_email")
+  supportPhone       String?  @map("support_phone")
+  address            String?
+  logoUrl            String?  @map("logo_url")
+  vatRate            Decimal  @default(10) @db.Decimal(5, 2) @map("vat_rate")
+  serviceFeeRate     Decimal  @default(0) @db.Decimal(5, 2) @map("service_fee_rate")
+  defaultDeliveryFee Decimal  @default(0) @db.Decimal(14, 2) @map("default_delivery_fee")
+  currency           String   @default("VND")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}

@@ -323,9 +323,10 @@ class UserServices {
   }
 
   async resetPassword(token: string, newPass: string) {
+    const normalizedToken = normalizeAccountToken(token, 'token')
     try {
       const decoded_token = await verifyToken({
-        token,
+        token: normalizedToken,
         secretOrPrivateKey: process.env.SECRET_FORGOT_PASSWORD as string,
         schema: TokenPayloadSchema
       })
@@ -339,18 +340,19 @@ class UserServices {
           message: USER_MESSAGE.FORGOT_PASSTOKEN_IS_INVALID
         })
       }
-      if (user.forgotPasswordToken !== token) {
+      if (user.forgotPasswordToken !== normalizedToken) {
         throw new ErrorWithStatus({
           httpStatusCode: HTTP_STATUS.UNAUTHORIZED,
           message: USER_MESSAGE.FORGOT_PASSTOKEN_IS_INVALID
         })
       }
 
-      Promise.all([
+      const password = await hashPassword(newPass)
+      await prisma.$transaction([
         prisma.user.update({
           where: { id: user.id },
           data: {
-            password: await hashPassword(newPass),
+            password,
             forgotPasswordToken: null
           }
         }),
@@ -368,6 +370,27 @@ class UserServices {
       throw error
     }
   }
+}
+
+function normalizeAccountToken(input: string, queryName: string) {
+  let value = input.trim()
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const decoded = decodeURIComponent(value)
+      if (decoded === value) break
+      value = decoded
+    } catch {
+      break
+    }
+  }
+  try {
+    const parsed = new URL(value)
+    value = parsed.searchParams.get(queryName) || value
+  } catch {
+    const queryMatch = value.match(new RegExp(`[?&]${queryName}=([^&#]+)`))
+    if (queryMatch?.[1]) value = queryMatch[1]
+  }
+  return value.replace(/\s+/g, '')
 }
 
 const userServices = new UserServices()

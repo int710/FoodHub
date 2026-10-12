@@ -61,7 +61,7 @@ export type EmailReqBody = z.infer<typeof emailSchema>
 // forgot password token
 const resetPasswordSchema = z
   .object({
-    forgot_password_token: z.string({ error: 'Forgot password token is invalid' }),
+    forgot_password_token: z.string({ error: 'Token khôi phục không hợp lệ' }).trim().min(1, 'Vui lòng nhập token khôi phục'),
     new_password: z
       .string()
       .trim()

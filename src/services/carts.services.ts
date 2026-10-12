@@ -5,6 +5,7 @@ import { ErrorWithStatus } from '~/models/Errors'
 import { CartItem, UpdateDetailItemType } from '~/models/schemas/order.schema'
 import { metadataType } from '~/models/types'
 import { prisma } from '~/config/prisma'
+import systemSettingsServices from '~/services/system-settings.services'
 
 export enum CartType {
   DINE_IN = 'dine-in',
@@ -110,11 +111,13 @@ class CartServices {
     })
 
     const subtotal = items.reduce((sum, item) => sum + item.subTotal, 0)
-    const vatAmount = Number((subtotal * 0.1).toFixed(2))
+    const vatRate = await systemSettingsServices.getVatRate()
+    const vatAmount = Number((subtotal * vatRate).toFixed(2))
     return {
       ...cart,
       items,
       subtotal,
+      vatRate: vatRate * 100,
       vatAmount,
       totalAmount: subtotal + vatAmount
     }

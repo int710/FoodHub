@@ -1,5 +1,5 @@
 import { Request, Response } from "express"
-import { CreateFeedbackDto } from "~/models/schemas/review.schema"
+import { AdminReviewQuery, CreateFeedbackDto } from "~/models/schemas/review.schema"
 import { ParamsDictionary } from "express-serve-static-core";
 import reviewsServices from "~/services/reviews.services";
 import { ApiResponse } from "~/models/ApiResponse";
@@ -20,6 +20,21 @@ const reviewController = {
 
     const result = await reviewsServices.listByMenuItem(menuItemId, page, limit)
     return res.json(result)
+  },
+
+  async listAll(req: Request, res: Response) {
+    const query = req.query as unknown as AdminReviewQuery
+    const result = await reviewsServices.listAll(query)
+    return res.json(ApiResponse('Lấy danh sách đánh giá thành công', result.data, {
+      page: query.page,
+      limit: query.limit,
+      total: result.total
+    }))
+  },
+
+  async delete(req: Request<{ id: string }>, res: Response) {
+    await reviewsServices.delete(req.params.id)
+    return res.json(ApiResponse('Đã xóa đánh giá', null))
   }
 }
 

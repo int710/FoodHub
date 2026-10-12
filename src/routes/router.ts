@@ -9,6 +9,7 @@ import paymentsRouter from './payment.routes'
 import reviewRouter from './review.routes'
 import notificationRouter from './notification.routes'
 import conversationRouter from './conversation.routes'
+import systemSettingsRouter from './system-settings.routes'
 
 const routerApp = Router()
 
@@ -22,5 +23,6 @@ routerApp.use('/payment', paymentsRouter)
 routerApp.use('/reviews', reviewRouter)
 routerApp.use('/notifications', notificationRouter)
 routerApp.use('/conversations', conversationRouter)
+routerApp.use('/settings', systemSettingsRouter)
 
 export default routerApp
