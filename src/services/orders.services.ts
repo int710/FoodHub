@@ -40,6 +40,9 @@ const orderDetailInclude = {
       paidAt: true,
       createdAt: true
     }
+  },
+  reviews: {
+    select: { menuItemId: true }
   }
 }
 

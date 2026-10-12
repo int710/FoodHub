@@ -18,10 +18,10 @@ class ReviewServices {
       })
     }
 
-    if (order.status !== OrderStatus.SERVED) {
+    if (order.status !== OrderStatus.SERVED && order.status !== OrderStatus.COMPLETED) {
       throw new ErrorWithStatus({
         httpStatusCode: HTTP_STATUS.BAD_REQUEST,
-        message: `Đơn ${order.status} chưa thể đánh giá`
+        message: 'Chỉ có thể đánh giá món sau khi đơn đã được phục vụ'
       })
     }
 
