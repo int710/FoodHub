@@ -14,21 +14,25 @@ import {
   VariantGroupRequestType
 } from '~/models/schemas/menu.schema'
 
+const PUBLIC_MENU_CACHE_KEY = `${MENU_CACHE_KEY}:v2`
+const itemCacheKey = (itemId: string) => `menu:item:v2:${itemId}`
+
 class MenuServices {
   private async invalidateMenuCache(): Promise<void> {
-    await redis.del(MENU_CACHE_KEY)
+    await redis.del(MENU_CACHE_KEY, PUBLIC_MENU_CACHE_KEY)
   }
 
   private async invalidateItemCache(itemId: string): Promise<void> {
-    await redis.del(`menu:item:${itemId}`)
+    await redis.del(`menu:item:${itemId}`, itemCacheKey(itemId))
     await this.invalidateMenuCache()
   }
 
   async getAll() {
-    const cached = await redis.get(MENU_CACHE_KEY)
+    const cached = await redis.get(PUBLIC_MENU_CACHE_KEY)
     if (cached) return cached
 
-    const categories = await prisma.menuCategory.findMany({
+    const [categories, bestSellers] = await Promise.all([
+      prisma.menuCategory.findMany({
       where: { isActive: true },
       orderBy: { sortOrder: 'asc' },
       include: {
@@ -51,7 +55,15 @@ class MenuServices {
           }
         }
       }
-    })
+      }),
+      prisma.menuItem.findMany({
+        where: { isAvailable: true, totalOrder: { gt: 0 } },
+        orderBy: [{ totalOrder: 'desc' }, { avgRating: 'desc' }],
+        take: 5,
+        select: { id: true }
+      })
+    ])
+    const bestSellerIds = new Set(bestSellers.map(item => item.id))
 
     const menu = categories.map((cat) => ({
       id: cat.id,
@@ -74,6 +86,7 @@ class MenuServices {
           saleEndsAt: sale?.endsAt ?? null,
           image: item.image,
           totalOrder: item.totalOrder,
+          isBestSeller: bestSellerIds.has(item.id),
           avgRating: item.avgRating,
           isAvailable: item.isAvailable,
           isFeatured: item.isFeatured,
@@ -83,7 +96,7 @@ class MenuServices {
       })
     }))
 
-    await redis.set(MENU_CACHE_KEY, menu, MENU_ALL_ITEMS_TTL)
+    await redis.set(PUBLIC_MENU_CACHE_KEY, menu, MENU_ALL_ITEMS_TTL)
     return menu
   }
 
@@ -344,10 +357,11 @@ class MenuServices {
   }
 
   async getItemDetail(id: string) {
-    const cached = await redis.get(`menu:item:${id}`)
+    const cached = await redis.get(itemCacheKey(id))
     if (cached) return cached
 
-    const item = await prisma.menuItem.findUnique({
+    const [item, bestSellers] = await Promise.all([
+      prisma.menuItem.findUnique({
       where: { id },
       include: {
         variantGroups: {
@@ -365,7 +379,15 @@ class MenuServices {
           where: { isActive: true, startsAt: { lte: new Date() }, endsAt: { gte: new Date() } }
         }
       }
-    })
+      }),
+      prisma.menuItem.findMany({
+        where: { isAvailable: true, totalOrder: { gt: 0 } },
+        orderBy: [{ totalOrder: 'desc' }, { avgRating: 'desc' }],
+        take: 5,
+        select: { id: true }
+      })
+    ])
+    const isBestSeller = bestSellers.some(bestSeller => bestSeller.id === id)
 
     if (item?.flashSale) {
       const salePrice = parseFloat(
@@ -374,17 +396,19 @@ class MenuServices {
 
       const data = {
         ...item,
+        isBestSeller,
         salePrice: salePrice,
         salePercent: item.flashSale.discountPercent ?? null,
         saleEndsAt: item.flashSale.endsAt ?? null
       }
-      await redis.set(`menu:item:${id}`, data, ITEM_TTL)
+      await redis.set(itemCacheKey(id), data, ITEM_TTL)
       return data
     }
 
-    await redis.set(`menu:item:${id}`, { ...item }, ITEM_TTL)
+    await redis.set(itemCacheKey(id), { ...item, isBestSeller }, ITEM_TTL)
     return {
-      ...item
+      ...item,
+      isBestSeller
     }
   }
 }

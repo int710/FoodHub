@@ -4,6 +4,7 @@ import { ParamsDictionary } from 'express-serve-static-core'
 import { ApiResponse } from '~/models/ApiResponse'
 import tableServices from '~/services/tables.services'
 import { TABLE_MESSAGE } from '~/constants/message'
+import { TableTokenSessionPayload } from '~/models/schemas/token.schema'
 
 export const getAllTablesController = async (req: Request, res: Response) => {
   const result = await tableServices.getAllTables()
@@ -60,4 +61,10 @@ export const qrScanController = async (
   } else {
     return res.json(ApiResponse(TABLE_MESSAGE.SCAN_QRCODE_SUCCESS, data))
   }
+}
+
+export const endTableSessionController = async (req: Request, res: Response) => {
+  const session = req.decoded_tokenTableSession as TableTokenSessionPayload
+  const result = await tableServices.endSession(session)
+  return res.json(ApiResponse('Đã kết thúc phiên bàn', result))
 }

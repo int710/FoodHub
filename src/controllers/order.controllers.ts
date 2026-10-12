@@ -18,7 +18,7 @@ import {
   serveOrderSchema,
   updateKitchenItemStatusSchema
 } from '~/models/schemas/order.schema'
-import { emitNewOrder, emitOrderItemStatusUpdate, emitOrderStatusUpdate } from '~/socket/orders/order.emitter'
+import { emitNewOrder, emitOrderItemStatusUpdate, emitOrderStatusUpdate, emitTableNewOrder } from '~/socket/orders/order.emitter'
 import { TokenPayload } from '~/models/schemas/token.schema'
 import notificationsServices from '~/services/notifications.services'
 import { buildVnpayPaymentUrl, getClientIp, VNPAY_PAYMENT_TIMEOUT_MS } from '~/utils/vnpay-payment'
@@ -47,11 +47,12 @@ function getTakeawayOwnerId(req: Request): string {
 }
 
 function resolveSessionId(req: Request, type: OrderType, fallbackOwnerId: string): string {
-  const tableSessionId = req.decoded_tokenTableSession?.sessionId
+  const tableSession = req.decoded_tokenTableSession
   const headerSessionId = req.headers['x-session-id'] as string | undefined
   const userId = req.decoded_authorization?.user_id
 
-  if (type === OrderType.DINE_IN) return tableSessionId || crypto.randomUUID()
+  // sessionId belongs to one scanner; visitId is shared by the current table visit.
+  if (type === OrderType.DINE_IN) return tableSession?.visitId || tableSession?.sessionId || crypto.randomUUID()
   if (type === OrderType.TAKEAWAY) return headerSessionId || userId || fallbackOwnerId
   return userId || crypto.randomUUID()
 }
@@ -403,6 +404,15 @@ export const ordersController = {
         clientIp: getClientIp(req)
       })
 
+      emitTableNewOrder({
+        orderId: createdOrder.id,
+        orderCode: createdOrder.orderCode,
+        orderType: createdOrder.type,
+        status: createdOrder.status,
+        createdAt: createdOrder.createdAt.toISOString(),
+        tableVisitId: createdOrder.type === OrderType.DINE_IN ? createdOrder.sessionId : undefined
+      })
+
       return res.json(ApiResponse('Tạo đơn hàng VNPay, vui lòng thanh toán', {
         order: createdOrder,
         paymentUrl,
@@ -441,6 +451,15 @@ export const ordersController = {
           }
         })
 
+        emitTableNewOrder({
+          orderId: createdOrder.id,
+          orderCode: createdOrder.orderCode,
+          orderType: createdOrder.type,
+          status: createdOrder.status,
+          createdAt: createdOrder.createdAt.toISOString(),
+          tableVisitId: createdOrder.type === OrderType.DINE_IN ? createdOrder.sessionId : undefined
+        })
+
         return res.json(ApiResponse('Tạo đơn hàng ZaloPay, vui lòng thanh toán', {
           order: createdOrder,
           paymentUrl: zaloOrder.orderUrl,
@@ -477,7 +496,8 @@ export const ordersController = {
       orderCode: createdOrder.orderCode,
       orderType: createdOrder.type,
       status: createdOrder.status,
-      createdAt: createdOrder.createdAt.toISOString()
+      createdAt: createdOrder.createdAt.toISOString(),
+      tableVisitId: createdOrder.type === OrderType.DINE_IN ? createdOrder.sessionId : undefined
     })
 
     return res.json(ApiResponse('Tạo đơn hàng tiền mặt thành công', {
@@ -499,7 +519,9 @@ export const ordersController = {
   async tableHistory(req: Request, res: Response) {
     const tableSession = req.decoded_tokenTableSession!
     const { query } = orderHistoryQuerySchema.parse({ query: req.query })
-    const result = await ordersServices.getTableSessionHistory(tableSession.sessionId, query)
+    const activeHostSessionId = await redis.get(RedisKey.tableHost(tableSession.tableId))
+    const visitId = tableSession.visitId || activeHostSessionId || tableSession.sessionId
+    const result = await ordersServices.getTableSessionHistory(visitId, tableSession.tableId, query)
     return res.json(ApiResponse('Lịch sử đơn hàng của phiên bàn', result.orders, result.pagination))
   },
 

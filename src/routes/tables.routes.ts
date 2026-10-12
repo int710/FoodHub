@@ -2,6 +2,7 @@ import { Router } from 'express'
 import {
   createTableController,
   deleteTableController,
+  endTableSessionController,
   getAllTablesController,
   getQRController,
   getTableByIdController,
@@ -9,7 +10,7 @@ import {
   regenerateQRController,
   toggleController
 } from '~/controllers/tables.controllers'
-import { authenticate } from '~/middlewares/auth.middlewares'
+import { authenticate, tableSessionAuth } from '~/middlewares/auth.middlewares'
 import { requireRole } from '~/middlewares/rbac.middlewares'
 import { requestHandler } from '~/utils/requestHandler'
 
@@ -23,5 +24,6 @@ tablesRouter.post('/:id/regenerate-qr', authenticate, requireRole('ADMIN'), requ
 tablesRouter.patch('/:id/toggle', authenticate, requireRole('ADMIN'), requestHandler(toggleController))
 tablesRouter.delete('/:id', authenticate, requireRole('ADMIN'), requestHandler(deleteTableController))
 tablesRouter.post('/scan', requestHandler(qrScanController))
+tablesRouter.post('/session/end', tableSessionAuth, requestHandler(endTableSessionController))
 
 export default tablesRouter

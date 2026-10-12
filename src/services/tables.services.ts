@@ -11,6 +11,9 @@ import { signToken } from '~/utils/jwt'
 import { generateQR } from '~/utils/QRCode'
 import { expireStalePaymentOrders } from '~/services/order-expiration.services'
 import { clearTableRuntimeData, occupyingOrderWhere } from '~/services/table-runtime.services'
+import { TableTokenSessionPayload } from '~/models/schemas/token.schema'
+import { getSocketIO } from '~/socket/socket.instance'
+import { CART_ROOMS, ORDER_ROOMS } from '~/socket/socket.room'
 
 class TableServices {
   async getAllTables() {
@@ -267,6 +270,38 @@ class TableServices {
   async transferHost(tableId: string, newSessionId: string) {
     await redis.set(RedisKey.tableHost(tableId), newSessionId, TTL_8H)
     return { ok: true }
+  }
+
+  async endSession(session: TableTokenSessionPayload) {
+    const activeHost = await redis.get(RedisKey.tableHost(session.tableId))
+    if (!session.isHost || activeHost !== session.sessionId) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.FORBIDDEN,
+        message: 'Chỉ chủ bàn mới được kết thúc phiên QR'
+      })
+    }
+
+    const activeOrders = await prisma.order.count({
+      where: { tableId: session.tableId, ...occupyingOrderWhere() }
+    })
+    if (activeOrders > 0) {
+      throw new ErrorWithStatus({
+        httpStatusCode: HTTP_STATUS.CONFLICT,
+        message: 'Bàn vẫn còn đơn đang xử lý hoặc chưa thanh toán. Hãy hoàn tất đơn trước khi kết thúc phiên.'
+      })
+    }
+
+    const visitId = session.visitId || session.sessionId
+    try {
+      getSocketIO()
+        .to(CART_ROOMS.TABLE(session.tableId))
+        .to(ORDER_ROOMS.TABLE_VISIT(visitId))
+        .emit('table-session:ended', { tableId: session.tableId, visitId })
+    } catch {
+      // API vẫn kết thúc phiên được khi chạy trong worker không có Socket.IO.
+    }
+    await clearTableRuntimeData(session.tableId)
+    return { tableId: session.tableId, ended: true }
   }
 }
 

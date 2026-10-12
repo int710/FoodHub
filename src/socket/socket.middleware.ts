@@ -53,6 +53,7 @@ export const socketAuthMiddleware = async (socket: Socket, next: (err?: Error) =
         throw new SocketAuthError('Invalid or expired table token', HTTP_STATUS.UNAUTHORIZED);
       }
 
+      const activeHostSessionId = await redis.get(RedisKey.tableHost(decodedTable.tableId));
       socket.data.user = {
         user_id: decodedTable.sessionId,
         token_type: TokenType.AccessToken,
@@ -63,7 +64,7 @@ export const socketAuthMiddleware = async (socket: Socket, next: (err?: Error) =
         tableId: decodedTable.tableId,
         sessionId: decodedTable.sessionId,
         isTableHost: decodedTable.isHost,
-        tableVisitId: decodedTable.visitId || decodedTable.sessionId
+        tableVisitId: decodedTable.visitId || activeHostSessionId || decodedTable.sessionId
       };
       return next();
     }

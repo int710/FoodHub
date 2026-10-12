@@ -6,6 +6,12 @@ import { CreateVoucherDto, UpdateVoucherDto } from '~/models/schemas/voucher.sch
 
 const invalidVoucher = (message: string) => new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.BAD_REQUEST, message })
 const money = (value: number) => new Prisma.Decimal(value.toFixed(2))
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000
+const vietnamDayBounds = (now = new Date()) => {
+  const local = new Date(now.getTime() + VIETNAM_OFFSET_MS)
+  const start = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate()) - VIETNAM_OFFSET_MS)
+  return { start, tomorrow: new Date(start.getTime() + 24 * 60 * 60 * 1000) }
+}
 
 class VoucherServices {
   async listAdmin() {
@@ -18,12 +24,13 @@ class VoucherServices {
 
   listAvailable(orderType?: OrderType) {
     const now = new Date()
+    const day = vietnamDayBounds(now)
     return prisma.voucher.findMany({
       where: {
         isActive: true,
         distribution: VoucherDistribution.ACCOUNT,
-        startsAt: { lte: now },
-        endsAt: { gt: now },
+        startsAt: { lt: day.tomorrow },
+        endsAt: { gte: day.start },
         ...(orderType && { applicableOrderTypes: { has: orderType } })
       },
       orderBy: [{ endsAt: 'asc' }, { createdAt: 'desc' }]
@@ -32,14 +39,15 @@ class VoucherServices {
 
   async listMine(customerId: string, orderType?: OrderType) {
     const now = new Date()
+    const day = vietnamDayBounds(now)
     const wallets = await prisma.voucherWallet.findMany({
       where: {
         customerId,
         voucher: {
           isActive: true,
           distribution: VoucherDistribution.ACCOUNT,
-          startsAt: { lte: now },
-          endsAt: { gt: now },
+          startsAt: { lt: day.tomorrow },
+          endsAt: { gte: day.start },
           ...(orderType && { applicableOrderTypes: { has: orderType } })
         }
       },
@@ -74,8 +82,9 @@ class VoucherServices {
     const voucher = await prisma.voucher.findUnique({ where: { code: normalizedCode } })
     if (!voucher || !voucher.isActive) throw invalidVoucher('Mã voucher không tồn tại hoặc đã bị tắt')
     const now = new Date()
-    if (voucher.startsAt > now) throw invalidVoucher('Voucher chưa đến thời gian sử dụng')
-    if (voucher.endsAt <= now) throw invalidVoucher('Voucher đã hết hạn')
+    const day = vietnamDayBounds(now)
+    if (voucher.startsAt >= day.tomorrow) throw invalidVoucher('Voucher chưa đến thời gian sử dụng')
+    if (voucher.endsAt < day.start) throw invalidVoucher('Voucher đã hết hạn')
     if (!voucher.applicableOrderTypes.includes(orderType)) throw invalidVoucher('Voucher không áp dụng cho loại đơn này')
     const validUsageWhere = {
       voucherId: voucher.id,

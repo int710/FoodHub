@@ -8,7 +8,7 @@ import { RegisterTypingSocket } from "./chat/typing.handler";
 import { presenceManager } from "./chat/presence.manage";
 import { setSocketIO } from "./socket.instance";
 import { registerOrderSocket } from "./orders/order.socket";
-import { CART_ROOMS } from "./socket.room";
+import { CART_ROOMS, ORDER_ROOMS } from "./socket.room";
 
 export const initSocket = (httpServer: HttpServer) => {
   const io = new Server(httpServer, {
@@ -28,6 +28,7 @@ export const initSocket = (httpServer: HttpServer) => {
 
     if (user.authType === 'TABLE_GUEST' && user.tableId) {
       socket.join(CART_ROOMS.TABLE(user.tableId))
+      if (user.tableVisitId) socket.join(ORDER_ROOMS.TABLE_VISIT(user.tableVisitId))
     }
 
     const userId = String(user.user_id)

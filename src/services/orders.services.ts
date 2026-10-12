@@ -92,11 +92,12 @@ class OrdersServices {
     }
   }
 
-  async getTableSessionHistory(sessionId: string, query: HistoryQuery) {
+  async getTableSessionHistory(sessionId: string, tableId: string, query: HistoryQuery) {
     const { limit, page, from, status, to, type } = query
     const skip = (page - 1) * limit
     const where = {
       sessionId,
+      tableId,
       ...(status ? { status } : {}),
       ...(type ? { type } : {}),
       ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {})
