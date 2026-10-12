@@ -22,6 +22,8 @@ export type SignTokenPayload = Omit<z.infer<typeof TokenPayloadSchema>, 'iat' | 
 export const TableTokenPayloadSchema = z.object({
   tableId: z.string().min(1, 'Table ID không được để trống'),
   name: z.string().min(1, 'Tên không được để trống'),
-  sessionId: z.uuid('Session ID phải đúng định dạng UUID')
+  sessionId: z.uuid('Session ID phải đúng định dạng UUID'),
+  visitId: z.uuid('Visit ID phải đúng định dạng UUID').optional(),
+  isHost: z.boolean().default(false)
 })
 export type TableTokenSessionPayload = z.infer<typeof TableTokenPayloadSchema> & JwtPayload

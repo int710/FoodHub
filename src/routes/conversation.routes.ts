@@ -10,5 +10,6 @@ const conversationRouter = Router()
 conversationRouter.use(authenticate, requireRole(Role.ADMIN, Role.STAFF))
 conversationRouter.get('/', requestHandler(conversationController.list))
 conversationRouter.patch('/:id/close', requestHandler(conversationController.close))
+conversationRouter.delete('/:id', requireRole(Role.ADMIN), requestHandler(conversationController.delete))
 
 export default conversationRouter

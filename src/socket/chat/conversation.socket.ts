@@ -39,7 +39,7 @@ export const registerConversationSocket = (io: Server, socket: Socket): void => 
         const isCustomer = userRoleLower === SenderRole.CUSTOMER
         const isHost = userRoleLower === SenderRole.STAFF || userRoleLower === SenderRole.ADMIN
         const customerOwnerId = user.authType === 'TABLE_GUEST'
-          ? user.sessionId
+          ? (user.tableVisitId || user.sessionId)
           : String(user.user_id)
         const ownerType = user.authType === 'TABLE_GUEST'
           ? ConversationOwnerType.TABLE_SESSION

@@ -8,6 +8,8 @@ import { prisma } from '~/config/prisma'
 import systemSettingsServices from '~/services/system-settings.services'
 import voucherServices from '~/services/vouchers.services'
 import { OrderType } from '~/generated/prisma/enums'
+import { getSocketIO } from '~/socket/socket.instance'
+import { CART_ROOMS } from '~/socket/socket.room'
 
 export enum CartType {
   DINE_IN = 'dine-in',
@@ -21,6 +23,19 @@ const META_FIELD = 'metadata'
 const getSig = (ids: string[] = []) => [...(ids || [])].sort().join(',')
 
 class CartServices {
+  private emitUpdated(type: CartType, ownerId: string, action: string) {
+    if (type !== CartType.DINE_IN) return
+    try {
+      getSocketIO().to(CART_ROOMS.TABLE(ownerId)).emit('cart:updated', {
+        tableId: ownerId,
+        action,
+        updatedAt: new Date().toISOString()
+      })
+    } catch {
+      // Service cũng được gọi từ worker/seed không khởi tạo Socket.IO.
+    }
+  }
+
   private getKey(type: CartType, ownerId: string) {
     // Nếu bạn đã có RedisKey.cart(type, ownerId) thì dùng luôn
     // còn không thì dùng tạm format này: cart:dine-in:table_xxx
@@ -159,6 +174,7 @@ class CartServices {
     const key = this.getKey(type, ownerId)
     await redis.hset(key, META_FIELD, JSON.stringify(metadata))
     await redis.expire(key, this.getTTL(type))
+    this.emitUpdated(type, ownerId, 'VOUCHER_APPLIED')
     return this.getCart(type, ownerId, customerId)
   }
 
@@ -166,6 +182,7 @@ class CartServices {
     const cart = await this.getStoredCart(type, ownerId)
     const { voucherCode: _voucherCode, ...metadata } = cart.metadata as any
     await redis.hset(this.getKey(type, ownerId), META_FIELD, JSON.stringify({ ...metadata, updatedAt: Date.now() }))
+    this.emitUpdated(type, ownerId, 'VOUCHER_REMOVED')
     return this.getCart(type, ownerId, customerId)
   }
 
@@ -211,6 +228,7 @@ class CartServices {
     }
     await redis.hset(key, META_FIELD, JSON.stringify(metadata))
     await redis.expire(key, this.getTTL(type))
+    this.emitUpdated(type, ownerId, 'ITEM_ADDED')
 
     return { items: currentCart.items, metadata }
   }
@@ -239,6 +257,7 @@ class CartServices {
       await redis.hset(key, field, JSON.stringify(item))
       const newMeta = { ...meta, type, ownerId, updatedAt: Date.now(), totalQuantity: meta.totalQuantity - oldQty + dto.quantity! }
       await redis.hset(key, META_FIELD, JSON.stringify(newMeta))
+      this.emitUpdated(type, ownerId, 'ITEM_UPDATED')
       return { action: 'updated' as const, item }
     }
 
@@ -273,6 +292,7 @@ class CartServices {
     }
     await redis.hset(key, META_FIELD, JSON.stringify(newMeta))
     await redis.expire(key, this.getTTL(type))
+    this.emitUpdated(type, ownerId, existingMatch ? 'ITEM_MERGED' : 'ITEM_UPDATED')
 
     return { action: existingMatch ? ('merged' as const) : ('updated' as const), item: finalItem }
   }
@@ -292,10 +312,12 @@ class CartServices {
       meta.updatedAt = Date.now()
       await redis.hset(key, META_FIELD, JSON.stringify(meta))
     }
+    this.emitUpdated(type, ownerId, 'ITEM_DELETED')
   }
 
   async clearCart(type: CartType, ownerId: string) {
     await redis.del(this.getKey(type, ownerId))
+    this.emitUpdated(type, ownerId, 'CART_CLEARED')
   }
 }
 

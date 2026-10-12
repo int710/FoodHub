@@ -11,7 +11,7 @@ const canAccessConversation = async (socket: Socket, conversationId: string) => 
   if (!user) return false
   if (user.role === 'STAFF' || user.role === 'ADMIN') return true
 
-  const ownerId = user.authType === 'TABLE_GUEST' ? user.sessionId : user.user_id
+  const ownerId = user.authType === 'TABLE_GUEST' ? (user.tableVisitId || user.sessionId) : user.user_id
   const ownerType = user.authType === 'TABLE_GUEST'
     ? ConversationOwnerType.TABLE_SESSION
     : ConversationOwnerType.USER

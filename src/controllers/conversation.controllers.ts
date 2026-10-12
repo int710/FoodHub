@@ -5,12 +5,13 @@ import { prisma } from '~/config/prisma'
 import { ApiResponse } from '~/models/ApiResponse'
 import { ErrorWithStatus } from '~/models/Errors'
 import { ConversationModel, ConversationOwnerType, ConversationStatus } from '~/models/mongodb/conversation.model'
+import { MessageModel } from '~/models/mongodb/message.model'
 import { getSocketIO } from '~/socket/socket.instance'
 import { getConversationRoom, HOST_ROOM } from '~/socket/socket.room'
 
 export const conversationController = {
   async list(_req: Request, res: Response) {
-    const conversations = await ConversationModel.find({ status: ConversationStatus.OPEN })
+    const conversations = await ConversationModel.find({})
       .sort({ lastMessageAt: -1, updatedAt: -1 })
       .lean()
     const legacyIds = conversations
@@ -30,7 +31,7 @@ export const conversationController = {
       prisma.table.findMany({ where: { id: { in: tableIds } }, select: { id: true, name: true, floor: true } }),
       prisma.order.findMany({
         where: { OR: [{ customerId: { in: userIds } }, { tableId: { in: tableIds } }] },
-        select: { orderCode: true, customerId: true, tableId: true, createdAt: true },
+        select: { orderCode: true, customerId: true, tableId: true, sessionId: true, createdAt: true },
         orderBy: { createdAt: 'desc' }
       })
     ])
@@ -38,8 +39,10 @@ export const conversationController = {
     const tableNames = new Map(tables.map((table) => [table.id, `${table.name}${table.floor ? ` · ${table.floor}` : ''}`]))
     const latestOrderByOwner = new Map<string, string>()
     orders.forEach((order) => {
-      const ownerId = order.customerId || order.tableId
-      if (ownerId && !latestOrderByOwner.has(ownerId)) latestOrderByOwner.set(ownerId, order.orderCode)
+      const ownerIds = [order.customerId, order.sessionId, order.tableId].filter(Boolean)
+      ownerIds.forEach((ownerId) => {
+        if (!latestOrderByOwner.has(ownerId!)) latestOrderByOwner.set(ownerId!, order.orderCode)
+      })
     })
     const data = conversations.map((conversation) => {
       const ownerId = String(conversation.customerId)
@@ -51,7 +54,7 @@ export const conversationController = {
         customerName: isTable ? (tableNames.get(tableId) || 'Khách tại bàn') : (userNames.get(ownerId) || 'Khách hàng'),
         conversationType: isTable ? 'TABLE' : 'USER',
         contextLabel: isTable ? 'Phiên QR tại bàn' : 'Tài khoản khách hàng',
-        orderCode: latestOrderByOwner.get(isTable ? tableId : ownerId) || null
+        orderCode: latestOrderByOwner.get(ownerId) || null
       }
     })
     return res.json(ApiResponse('Danh sách hội thoại', data))
@@ -71,9 +74,27 @@ export const conversationController = {
       throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.NOT_FOUND, message: 'Không tìm thấy hội thoại' })
     }
     const io = getSocketIO()
-    const payload = { conversationId: id, status: ConversationStatus.CLOSED }
+    const payload = { conversationId: id, status: ConversationStatus.CLOSED, changeType: 'CONVERSATION_CLOSED' }
     io.to(getConversationRoom(id)).emit('conversation:closed', payload)
     io.to(HOST_ROOM).emit('conversation:updated', { ...conversation, ...payload })
     return res.json(ApiResponse('Đã đóng hội thoại', conversation))
+  },
+
+  async delete(req: Request<{ id: string }>, res: Response) {
+    const { id } = req.params
+    if (!mongoose.isValidObjectId(id)) {
+      throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.BAD_REQUEST, message: 'Mã hội thoại không hợp lệ' })
+    }
+    const conversation = await ConversationModel.findById(id).select({ _id: 1 }).lean()
+    if (!conversation) {
+      throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.NOT_FOUND, message: 'Không tìm thấy hội thoại' })
+    }
+    await MessageModel.deleteMany({ conversationId: id })
+    await ConversationModel.deleteOne({ _id: id })
+    const payload = { conversationId: id }
+    const io = getSocketIO()
+    io.to(getConversationRoom(id)).emit('conversation:deleted', payload)
+    io.to(HOST_ROOM).emit('conversation:deleted', payload)
+    return res.json(ApiResponse('Đã xóa toàn bộ cuộc trò chuyện', null))
   }
 }

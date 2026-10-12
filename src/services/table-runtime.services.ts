@@ -64,7 +64,7 @@ export async function clearTableRuntimeData(tableId: string) {
     try {
       const io = getSocketIO()
       ids.forEach((id) => {
-        const payload = { conversationId: String(id), status: ConversationStatus.CLOSED }
+        const payload = { conversationId: String(id), status: ConversationStatus.CLOSED, changeType: 'SESSION_CLOSED' }
         io.to(getConversationRoom(String(id))).emit('conversation:closed', payload)
         io.to(HOST_ROOM).emit('conversation:updated', payload)
       })
@@ -76,6 +76,8 @@ export async function clearTableRuntimeData(tableId: string) {
     ...sessionIds.map(RedisKey.tableSession),
     sessionsKey,
     RedisKey.tableHost(tableId),
+    RedisKey.cart('dine-in', tableId),
+    // Key uppercase của bản cũ.
     RedisKey.cart('DINE_IN', tableId),
     // Key cũ được giữ trong cleanup để không sót dữ liệu từ phiên bản trước.
     RedisKey.cartTable(tableId)

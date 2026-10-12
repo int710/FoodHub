@@ -6,6 +6,8 @@ export interface TableTokenPayload {
   tableId: string
   name: string
   sessionId: `${string}-${string}-${string}-${string}-${string}`
+  visitId?: `${string}-${string}-${string}-${string}-${string}`
+  isHost: boolean
 }
 
 export type DeliveryInfo = {

@@ -8,6 +8,7 @@ import { RegisterTypingSocket } from "./chat/typing.handler";
 import { presenceManager } from "./chat/presence.manage";
 import { setSocketIO } from "./socket.instance";
 import { registerOrderSocket } from "./orders/order.socket";
+import { CART_ROOMS } from "./socket.room";
 
 export const initSocket = (httpServer: HttpServer) => {
   const io = new Server(httpServer, {
@@ -24,6 +25,10 @@ export const initSocket = (httpServer: HttpServer) => {
     console.log(`Socket connected: ${socket.id}`)
     const user = socket.data.user
     if (!user) return
+
+    if (user.authType === 'TABLE_GUEST' && user.tableId) {
+      socket.join(CART_ROOMS.TABLE(user.tableId))
+    }
 
     const userId = String(user.user_id)
     const isTrackedUser = user.authType === 'USER'

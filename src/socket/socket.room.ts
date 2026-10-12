@@ -7,3 +7,7 @@ export const ORDER_ROOMS = {
   HOST_ORDERS: 'host:orders',
   ORDER_DETAIL: (orderId: string) => `order:${orderId}`,
 } as const;
+
+export const CART_ROOMS = {
+  TABLE: (tableId: string) => `cart:table:${tableId}`
+} as const

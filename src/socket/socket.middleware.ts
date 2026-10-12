@@ -18,6 +18,8 @@ export interface SocketUserType {
   authType: 'USER' | 'TABLE_GUEST';
   tableId?: string;
   sessionId?: string;
+  isTableHost?: boolean;
+  tableVisitId?: string;
 }
 
 declare module "socket.io" {
@@ -59,7 +61,9 @@ export const socketAuthMiddleware = async (socket: Socket, next: (err?: Error) =
         email: '',
         authType: 'TABLE_GUEST',
         tableId: decodedTable.tableId,
-        sessionId: decodedTable.sessionId
+        sessionId: decodedTable.sessionId,
+        isTableHost: decodedTable.isHost,
+        tableVisitId: decodedTable.visitId || decodedTable.sessionId
       };
       return next();
     }

@@ -31,6 +31,8 @@ import {
 } from '~/services/zalopay.services'
 import systemSettingsServices from '~/services/system-settings.services'
 import voucherServices from '~/services/vouchers.services'
+import { redis } from '~/config/redis'
+import { RedisKey } from '~/constants/redis'
 
 function mapOrderTypeToCartType(type: OrderType): CartType {
   if (type === OrderType.DINE_IN) return CartType.DINE_IN
@@ -84,6 +86,14 @@ export const ordersController = {
         })
       }
       ownerId = tableId
+      const tableSession = req.decoded_tokenTableSession
+      const activeHostSessionId = await redis.get(RedisKey.tableHost(tableId))
+      if (!tableSession?.isHost || activeHostSessionId !== tableSession.sessionId) {
+        throw new ErrorWithStatus({
+          httpStatusCode: HTTP_STATUS.FORBIDDEN,
+          message: 'Chỉ chủ bàn (người quét QR đầu tiên) được xác nhận đặt đơn'
+        })
+      }
     } else if (orderContext.type === OrderType.TAKEAWAY) {
       ownerId = getTakeawayOwnerId(req)
     } else {

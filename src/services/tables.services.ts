@@ -223,10 +223,11 @@ class TableServices {
     const currentHost = await redis.get(RedisKey.tableHost(table.id))
     const needNewHost = !currentHost || !(await redis.exists(RedisKey.tableSession(currentHost)))
     if (needNewHost) await redis.set(RedisKey.tableHost(table.id), sessionId, TTL_8H)
+    const visitId = needNewHost ? sessionId : currentHost!
 
     const [tableToken] = await Promise.all([
       signToken({
-        payload: { tableId: table.id, name: table.name, sessionId, isHost: needNewHost },
+        payload: { tableId: table.id, name: table.name, sessionId, visitId, isHost: needNewHost },
         secretOrPrivateKey: process.env.SECRET_TABLE_TOKEN as string,
         options: { expiresIn: '8h' }
       }),
@@ -239,7 +240,11 @@ class TableServices {
     ])
 
     if (!activeOrder && needNewHost) {
-      await redis.del(RedisKey.cartTable(table.id))
+      await redis.del(
+        RedisKey.cart('dine-in', table.id),
+        RedisKey.cart('DINE_IN', table.id),
+        RedisKey.cartTable(table.id)
+      )
     }
 
     return {
@@ -252,6 +257,7 @@ class TableServices {
       },
       tableToken,
       sessionId,
+      isHost: needNewHost,
       expiresIn: TABLE_SESSION_TTL,
       activeOrderId: table.orders[0]?.id || null,
       message: `Chào mừng bạn đến ${table.name}`
