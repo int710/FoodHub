@@ -6,6 +6,8 @@ import { ErrorWithStatus } from '~/models/Errors'
 import { PaymentStatus } from '~/generated/prisma/enums'
 import { emitOrderStatusUpdate } from "~/socket/orders/order.emitter"
 import notificationsServices from "~/services/notifications.services"
+import { menusServices } from '~/services/menu.services'
+import { emitMenuUpdated } from '~/socket/menu.emitter'
 import {
   clearTableRuntimeData,
   occupyingOrderWhere
@@ -191,6 +193,12 @@ class OrdersServices {
       },
       include: orderDetailInclude
     })
+
+    const completedMenuItemIds = updatedOrder.items.map(item => item.menuItemId)
+    await menusServices.invalidateSalesCache(completedMenuItemIds).catch(error => {
+      console.error('[Menu] Failed to invalidate sales cache:', error)
+    })
+    emitMenuUpdated({ action: 'sales' })
 
     emitOrderStatusUpdate({
       orderId: updatedOrder.id,
