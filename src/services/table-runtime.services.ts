@@ -29,6 +29,12 @@ export function occupyingOrderWhere(now = new Date()) {
           { expireAt: { gt: now } },
           { expireAt: null, createdAt: { gt: legacyCutoff } }
         ]
+      },
+      {
+        // PAYMENT_FAILED là trạng thái có thể phục hồi: giữ phiên bàn thêm một
+        // khoảng ngắn để khách thử lại hoặc nhân viên đổi sang tiền mặt.
+        status: OrderStatus.PAYMENT_FAILED,
+        updatedAt: { gt: legacyCutoff }
       }
     ]
   }

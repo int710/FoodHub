@@ -407,7 +407,13 @@ export const openApiDocument: OpenAPIV3.Document = {
     },
     '/payment/{orderId}/zalopay/convert': {
       patch: {
-        ...operation('Convert an unpaid CASH order to ZaloPay QR', ['Payments'], { '200': successResponse(), '400': errorResponse('Order cannot change payment method'), '401': errorResponse('Authentication required'), '403': errorResponse('Staff or admin role required'), '409': errorResponse('Payment is not CASH/UNPAID'), '502': errorResponse('ZaloPay unavailable') }, bearer),
+        ...operation('Create or reopen ZaloPay for an unpaid or failed order', ['Payments'], { '200': successResponse(), '400': errorResponse('Order cannot change payment method'), '401': errorResponse('Authentication required'), '403': errorResponse('Staff or admin role required'), '409': errorResponse('Payment is already paid or unsupported'), '502': errorResponse('ZaloPay unavailable') }, bearer),
+        parameters: [idParameter('orderId', 'Order ID')]
+      }
+    },
+    '/payment/{orderId}/cash/convert': {
+      patch: {
+        ...operation('Convert a failed or expired ZaloPay payment to CASH', ['Payments'], { '200': successResponse(), '400': errorResponse('Order cannot change payment method'), '401': errorResponse('Authentication required'), '403': errorResponse('Staff or admin role required'), '409': errorResponse('ZaloPay is paid or still processing') }, bearer),
         parameters: [idParameter('orderId', 'Order ID')]
       }
     },

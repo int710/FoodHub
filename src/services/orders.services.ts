@@ -42,7 +42,16 @@ const orderDetailInclude = {
     }
   },
   reviews: {
-    select: { menuItemId: true }
+    orderBy: { createdAt: 'desc' as const },
+    select: {
+      id: true,
+      menuItemId: true,
+      rating: true,
+      comment: true,
+      images: true,
+      createdAt: true,
+      customer: { select: { id: true, name: true, avatar: true } }
+    }
   }
 }
 

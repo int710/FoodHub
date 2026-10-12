@@ -21,6 +21,12 @@ paymentsRouter.patch(
   requireRole('ADMIN', 'STAFF'),
   requestHandler(zalopayController.convertCashToZalopay)
 )
+paymentsRouter.patch(
+  '/:orderId/cash/convert',
+  authenticate,
+  requireRole('ADMIN', 'STAFF'),
+  requestHandler(zalopayController.convertToCash)
+)
 paymentsRouter.get('/:orderId', requestHandler(paymentController.detailPayment))
 paymentsRouter.patch(
   '/:orderId/cash-confirm',
