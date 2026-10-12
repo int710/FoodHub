@@ -30,6 +30,7 @@ import {
   ZALOPAY_PAYMENT_TIMEOUT_MS
 } from '~/services/zalopay.services'
 import systemSettingsServices from '~/services/system-settings.services'
+import voucherServices from '~/services/vouchers.services'
 
 function mapOrderTypeToCartType(type: OrderType): CartType {
   if (type === OrderType.DINE_IN) return CartType.DINE_IN
@@ -232,7 +233,7 @@ export const ordersController = {
       ])
     }
 
-    const cart = await cartsServices.getCart(cartType, ownerId)
+    const cart = await cartsServices.getCart(cartType, ownerId, orderContext.user?.user_id)
     if (!cart.items.length) {
       throw new ErrorWithStatus({
         httpStatusCode: HTTP_STATUS.BAD_REQUEST,
@@ -315,9 +316,14 @@ export const ordersController = {
       }
     })
 
+    const voucherResult = cart.voucher
+      ? await voucherServices.calculate(cart.voucher.code, subtotal, orderContext.type, orderContext.user?.user_id)
+      : null
+    const discountAmount = voucherResult?.discountAmount || 0
+    const taxableAmount = Math.max(0, subtotal - discountAmount)
     const vatRate = await systemSettingsServices.getVatRate()
-    const vatAmount = Number((subtotal * vatRate).toFixed(2))
-    const totalAmount = Number((subtotal + vatAmount).toFixed(2))
+    const vatAmount = Number((taxableAmount * vatRate).toFixed(2))
+    const totalAmount = Number((taxableAmount + vatAmount).toFixed(2))
 
     const orderStatus = isOnlinePayment ? OrderStatus.PENDING_PAYMENT : OrderStatus.PENDING_CONFIRMATION
     const paymentStatus = isOnlinePayment ? PaymentStatus.PENDING : PaymentStatus.UNPAID
@@ -339,7 +345,10 @@ export const ordersController = {
           confirmedById: orderContext.staffId || undefined,
           subtotal: new Prisma.Decimal(subtotal.toFixed(2)),
           vatAmount: new Prisma.Decimal(vatAmount.toFixed(2)),
+          discountAmount: new Prisma.Decimal(discountAmount.toFixed(2)),
           totalAmount: new Prisma.Decimal(totalAmount.toFixed(2)),
+          voucherId: voucherResult?.voucher.id,
+          voucherCode: voucherResult?.voucher.code,
           deliveryInfo: body.deliveryInfo ? (body.deliveryInfo as Prisma.InputJsonValue) : undefined,
           ...(isOnlinePayment
             ? { expireAt: new Date(Date.now() + (isZalopay ? ZALOPAY_PAYMENT_TIMEOUT_MS : VNPAY_PAYMENT_TIMEOUT_MS)) }
@@ -350,6 +359,18 @@ export const ordersController = {
       await tx.orderItem.createMany({
         data: orderItemsData.map((it) => ({ ...it, orderId: order.id }))
       })
+
+      if (voucherResult) {
+        const voucher = voucherResult.voucher
+        await tx.voucherUsage.create({
+          data: {
+            voucherId: voucher.id,
+            orderId: order.id,
+            customerId: orderContext.user?.user_id,
+            discountAmount: new Prisma.Decimal(discountAmount.toFixed(2))
+          }
+        })
+      }
 
       await tx.payment.create({
         data: {

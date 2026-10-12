@@ -6,6 +6,8 @@ import { CartItem, UpdateDetailItemType } from '~/models/schemas/order.schema'
 import { metadataType } from '~/models/types'
 import { prisma } from '~/config/prisma'
 import systemSettingsServices from '~/services/system-settings.services'
+import voucherServices from '~/services/vouchers.services'
+import { OrderType } from '~/generated/prisma/enums'
 
 export enum CartType {
   DINE_IN = 'dine-in',
@@ -69,9 +71,9 @@ class CartServices {
     return { items, metadata }
   }
 
-  async getCart(type: CartType, ownerId: string) {
+  async getCart(type: CartType, ownerId: string, customerId?: string) {
     const cart = await this.getStoredCart(type, ownerId)
-    if (!cart.items.length) return { ...cart, totalAmount: 0 }
+    if (!cart.items.length) return { ...cart, subtotal: 0, vatAmount: 0, discountAmount: 0, totalAmount: 0, voucher: null }
 
     const menuItems = await prisma.menuItem.findMany({
       where: { id: { in: cart.items.map((item) => item.menuItemId) } },
@@ -111,16 +113,66 @@ class CartServices {
     })
 
     const subtotal = items.reduce((sum, item) => sum + item.subTotal, 0)
+    const voucherCode = typeof cart.metadata.voucherCode === 'string' ? cart.metadata.voucherCode : undefined
+    let voucherResult = null as Awaited<ReturnType<typeof voucherServices.calculate>> | null
+    let voucherError: string | null = null
+    if (voucherCode) {
+      try {
+        voucherResult = await voucherServices.calculate(voucherCode, subtotal, this.toOrderType(type), customerId)
+      } catch (error) {
+        if (!(error instanceof ErrorWithStatus)) throw error
+        voucherError = error.message
+        const { voucherCode: _voucherCode, ...metadata } = cart.metadata as any
+        cart.metadata = { ...metadata, updatedAt: Date.now() }
+        await redis.hset(this.getKey(type, ownerId), META_FIELD, JSON.stringify(cart.metadata))
+      }
+    }
+    const discountAmount = voucherResult?.discountAmount || 0
+    const taxableAmount = Math.max(0, subtotal - discountAmount)
     const vatRate = await systemSettingsServices.getVatRate()
-    const vatAmount = Number((subtotal * vatRate).toFixed(2))
+    const vatAmount = Number((taxableAmount * vatRate).toFixed(2))
     return {
       ...cart,
       items,
       subtotal,
       vatRate: vatRate * 100,
       vatAmount,
-      totalAmount: subtotal + vatAmount
+      discountAmount,
+      totalAmount: taxableAmount + vatAmount,
+      voucher: voucherResult ? {
+        id: voucherResult.voucher.id,
+        code: voucherResult.voucher.code,
+        name: voucherResult.voucher.name,
+        discountType: voucherResult.voucher.discountType,
+        discountValue: voucherResult.voucher.discountValue,
+        discountAmount
+      } : null,
+      voucherError
     }
+  }
+
+  async applyVoucher(type: CartType, ownerId: string, code: string, customerId?: string) {
+    const cart = await this.getCart(type, ownerId, customerId)
+    if (!cart.items.length) throw new ErrorWithStatus({ httpStatusCode: HTTP_STATUS.BAD_REQUEST, message: 'Giỏ hàng đang trống' })
+    const result = await voucherServices.calculate(code, cart.subtotal, this.toOrderType(type), customerId)
+    const metadata = { ...cart.metadata, voucherCode: result.voucher.code, updatedAt: Date.now() }
+    const key = this.getKey(type, ownerId)
+    await redis.hset(key, META_FIELD, JSON.stringify(metadata))
+    await redis.expire(key, this.getTTL(type))
+    return this.getCart(type, ownerId, customerId)
+  }
+
+  async removeVoucher(type: CartType, ownerId: string, customerId?: string) {
+    const cart = await this.getStoredCart(type, ownerId)
+    const { voucherCode: _voucherCode, ...metadata } = cart.metadata as any
+    await redis.hset(this.getKey(type, ownerId), META_FIELD, JSON.stringify({ ...metadata, updatedAt: Date.now() }))
+    return this.getCart(type, ownerId, customerId)
+  }
+
+  private toOrderType(type: CartType): OrderType {
+    if (type === CartType.DINE_IN) return OrderType.DINE_IN
+    if (type === CartType.TAKEAWAY) return OrderType.TAKEAWAY
+    return OrderType.DELIVERY
   }
 
   async addItemToCart(type: CartType, ownerId: string, dto: CartItem, addedBy: string) {
@@ -149,6 +201,7 @@ class CartServices {
     }
 
     const metadata = {
+      ...currentCart.metadata,
       type,
       ownerId,
       tableId: type === CartType.DINE_IN ? ownerId : undefined,

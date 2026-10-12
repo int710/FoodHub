@@ -10,6 +10,7 @@ import { RegisterRequestBody, UpdateProfileRequestBody } from '~/models/schemas/
 import { comparePassword, hashPassword } from '~/utils/crypto'
 import { signToken, verifyToken } from '~/utils/jwt'
 import { sendEmailForgotPassword, sendVerifyEmail } from '~/utils/send-email'
+import { VoucherDistribution } from '~/generated/prisma/enums'
 
 class UserServices {
   private signAccessToken(payload: SignTokenPayload) {
@@ -63,8 +64,21 @@ class UserServices {
         message: USER_MESSAGE.EMAIL_ALREADY_EXISTS
       })
     }
-    const newUser = await prisma.user.create({
-      data: { email, name, password: await hashPassword(password), dateOfBirth }
+    const hashedPassword = await hashPassword(password)
+    const newUser = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: { email, name, password: hashedPassword, dateOfBirth }
+      })
+      const accountVouchers = await tx.voucher.findMany({
+        where: { distribution: VoucherDistribution.ACCOUNT, isActive: true, endsAt: { gt: new Date() } },
+        select: { id: true }
+      })
+      if (accountVouchers.length) {
+        await tx.voucherWallet.createMany({
+          data: accountVouchers.map(voucher => ({ voucherId: voucher.id, customerId: user.id }))
+        })
+      }
+      return user
     })
 
     const payloadDataToken: SignTokenPayload = {

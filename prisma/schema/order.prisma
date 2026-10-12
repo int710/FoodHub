@@ -38,6 +38,16 @@ enum PaymentMethod {
   CASH
 }
 
+enum VoucherDiscountType {
+  PERCENT
+  FIXED_AMOUNT
+}
+
+enum VoucherDistribution {
+  ACCOUNT
+  SECRET
+}
+
 model Order {
   id String @id @default(cuid())
   orderCode String @unique
@@ -59,7 +69,12 @@ model Order {
 
   subtotal Decimal @db.Decimal(14, 2) @default(0)
   vatAmount Decimal @db.Decimal(14,2) @default(0)
+  discountAmount Decimal @db.Decimal(14,2) @default(0)
   totalAmount Decimal @db.Decimal(14,2) @default(0)
+
+  voucherId String?
+  voucher Voucher? @relation(fields: [voucherId], references: [id], onDelete: SetNull)
+  voucherCode String?
 
   confirmAt DateTime?
   readyAt DateTime?
@@ -72,6 +87,7 @@ model Order {
   items OrderItem[]
   payments Payment[]
   reviews Review[]
+  voucherUsage VoucherUsage?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -83,6 +99,61 @@ model Order {
   @@index([createdAt(sort: Desc)])
   @@map("orders")
 
+}
+
+model Voucher {
+  id String @id @default(cuid())
+  code String @unique
+  name String
+  description String?
+  discountType VoucherDiscountType
+  distribution VoucherDistribution @default(SECRET)
+  discountValue Decimal @db.Decimal(14,2)
+  minOrderAmount Decimal @db.Decimal(14,2) @default(0)
+  maxDiscountAmount Decimal? @db.Decimal(14,2)
+  applicableOrderTypes OrderType[] @default([DINE_IN, TAKEAWAY, DELIVERY])
+  startsAt DateTime
+  endsAt DateTime
+  usageLimit Int?
+  usedCount Int @default(0)
+  perCustomerLimit Int @default(1)
+  isActive Boolean @default(true)
+  orders Order[]
+  usages VoucherUsage[]
+  wallets VoucherWallet[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, startsAt, endsAt])
+  @@map("vouchers")
+}
+
+model VoucherWallet {
+  id String @id @default(cuid())
+  voucherId String
+  voucher Voucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  customerId String
+  customer User @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  receivedAt DateTime @default(now())
+
+  @@unique([voucherId, customerId])
+  @@index([customerId, receivedAt(sort: Desc)])
+  @@map("voucher_wallets")
+}
+
+model VoucherUsage {
+  id String @id @default(cuid())
+  voucherId String
+  voucher Voucher @relation(fields: [voucherId], references: [id], onDelete: Restrict)
+  orderId String @unique
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customerId String?
+  customer User? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  discountAmount Decimal @db.Decimal(14,2)
+  createdAt DateTime @default(now())
+
+  @@index([voucherId, customerId])
+  @@map("voucher_usages")
 }
 
 model OrderItem {

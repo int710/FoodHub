@@ -4,6 +4,7 @@ import { optionalAuth } from '~/middlewares/auth.middlewares'
 import { resolveCartContext, validateCartContext } from '~/middlewares/cart.middlewares'
 import { validate } from '~/middlewares/validate'
 import { cartItemsSchema, UpdateDetailSchema } from '~/models/schemas/order.schema'
+import { applyVoucherSchema } from '~/models/schemas/voucher.schema'
 import { requestHandler } from '~/utils/requestHandler'
 
 // Cart shared lưu trên Redis, tách theo type + ownerId
@@ -25,6 +26,21 @@ cartsRouter.get(
     resolveCartContext,
     validateCartContext,
     requestHandler(cartControllers.getCart)
+)
+
+cartsRouter.post(
+    '/:type/voucher',
+    resolveCartContext,
+    validateCartContext,
+    validate(applyVoucherSchema),
+    requestHandler(cartControllers.applyVoucher)
+)
+
+cartsRouter.delete(
+    '/:type/voucher',
+    resolveCartContext,
+    validateCartContext,
+    requestHandler(cartControllers.removeVoucher)
 )
 
 cartsRouter.patch(

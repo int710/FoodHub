@@ -23,7 +23,13 @@ const reviewController = {
   },
 
   async listAll(req: Request, res: Response) {
-    const query = req.query as unknown as AdminReviewQuery
+    const query: AdminReviewQuery = {
+      page: Math.max(1, Number(req.query.page) || 1),
+      limit: Math.min(100, Math.max(1, Number(req.query.limit) || 20)),
+      menuItemId: typeof req.query.menuItemId === 'string' ? req.query.menuItemId : undefined,
+      rating: req.query.rating ? Number(req.query.rating) : undefined,
+      search: typeof req.query.search === 'string' ? req.query.search.trim() : undefined
+    }
     const result = await reviewsServices.listAll(query)
     return res.json(ApiResponse('Lấy danh sách đánh giá thành công', result.data, {
       page: query.page,

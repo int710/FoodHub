@@ -66,7 +66,7 @@ class ReviewServices {
   }
 
   async listAll(query: AdminReviewQuery) {
-    const { page, limit, menuItemId, rating, search } = query
+    const { page = 1, limit = 20, menuItemId, rating, search } = query
     const where = {
       ...(menuItemId && { menuItemId }),
       ...(rating && { rating }),

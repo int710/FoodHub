@@ -28,6 +28,8 @@ model User {
   confirmedOrders Order[] @relation("ConfirmedByStaff")
   reviews Review[]
   flashSales FlashSale[]
+  voucherUsages VoucherUsage[]
+  voucherWallets VoucherWallet[]
   
   @@index([email])
   @@index([role])

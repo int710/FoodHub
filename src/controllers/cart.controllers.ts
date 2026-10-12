@@ -59,8 +59,20 @@ const cartControllers = {
 
   async getCart(req: Request, res: Response) {
     const ctx = getCartContextFromRequest(req)
-    const data = await cartsServices.getCart(ctx.type, ctx.ownerId)
+    const data = await cartsServices.getCart(ctx.type, ctx.ownerId, req.decoded_authorization?.user_id)
     return res.json(ApiResponse(`Giỏ hàng ${ctx.displayName}`, data))
+  },
+
+  async applyVoucher(req: Request<ParamsDictionary, any, { code: string }>, res: Response) {
+    const ctx = getCartContextFromRequest(req)
+    const data = await cartsServices.applyVoucher(ctx.type, ctx.ownerId, req.body.code, req.decoded_authorization?.user_id)
+    return res.json(ApiResponse('Áp dụng voucher thành công', data))
+  },
+
+  async removeVoucher(req: Request, res: Response) {
+    const ctx = getCartContextFromRequest(req)
+    const data = await cartsServices.removeVoucher(ctx.type, ctx.ownerId, req.decoded_authorization?.user_id)
+    return res.json(ApiResponse('Đã bỏ voucher', data))
   },
 
   async updateItem(req: Request<{ itemId: string }, any, UpdateDetailItemType>, res: Response) {
