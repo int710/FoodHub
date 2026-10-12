@@ -11,6 +11,11 @@ interface SendMessagePayload {
   type?: MessageType
 }
 
+interface DeleteMessagePayload {
+  conversationId: string
+  messageId: string
+}
+
 interface SocketAckResponse {
   success: boolean
   data?: any
@@ -126,6 +131,52 @@ export const registerMessageSocket = (io: Server, socket: Socket): void => {
         success: false,
         message: 'Internal server error while sending message'
       })
+    }
+  })
+
+  socket.on('message:delete', async (payload: DeleteMessagePayload, callback?: (response: SocketAckResponse) => void) => {
+    try {
+      const user = socket.data.user
+      if (!user) return callback?.({ success: false, message: 'Unauthenticated' })
+      if (user.role?.toUpperCase() !== 'ADMIN') {
+        return callback?.({ success: false, message: 'Chỉ quản trị viên được xóa tin nhắn' })
+      }
+
+      const { conversationId, messageId } = payload || {}
+      if (!conversationId || !messageId) {
+        return callback?.({ success: false, message: 'Thiếu mã hội thoại hoặc tin nhắn' })
+      }
+
+      const conversation = await ConversationModel.findById(conversationId)
+      if (!conversation) return callback?.({ success: false, message: 'Không tìm thấy hội thoại' })
+
+      const deletedMessage = await MessageModel.findOneAndDelete({
+        _id: messageId,
+        conversationId
+      })
+      if (!deletedMessage) return callback?.({ success: false, message: 'Tin nhắn không tồn tại hoặc đã bị xóa' })
+
+      const latestMessage = await MessageModel.findOne({ conversationId }).sort({ createdAt: -1 }).lean()
+      const updatedConversation = await ConversationModel.findByIdAndUpdate(
+        conversationId,
+        {
+          lastMessage: latestMessage?.content || null,
+          lastMessageSenderId: latestMessage?.senderId || null,
+          lastMessageAt: latestMessage?.createdAt || null
+        },
+        { new: true }
+      ).lean()
+
+      const eventPayload = { conversationId, messageId }
+      io.to(getConversationRoom(conversationId)).emit('message:deleted', eventPayload)
+      io.to(HOST_ROOM).emit('conversation:updated', {
+        ...updatedConversation,
+        changeType: 'MESSAGE_DELETED'
+      })
+      callback?.({ success: true, data: eventPayload })
+    } catch (error) {
+      console.error('[Socket Error] message:delete:', error)
+      callback?.({ success: false, message: 'Không thể xóa tin nhắn' })
     }
   })
 }
